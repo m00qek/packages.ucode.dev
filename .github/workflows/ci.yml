@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build packages (${{ matrix.sdk_version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sdk_version: ["24.10.6", "25.12.3"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build packages
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/ucode-docopt:/builder/package/ucode-docopt:ro \
+            -v ${{ github.workspace }}/ucode-utest:/builder/package/ucode-utest:ro \
+            openwrt/sdk:x86-64-${{ matrix.sdk_version }} \
+            sh -c "
+              ./scripts/feeds update base &&
+              ./scripts/feeds install ucode &&
+              make defconfig &&
+              make package/ucode-docopt/compile package/ucode-utest/compile V=s
+            "
