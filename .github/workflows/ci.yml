@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main, master]
+    tags: ["v*"]
     paths-ignore:
       - "**.md"
       - ".gitignore"
@@ -28,9 +29,12 @@ jobs:
 
       - name: Build packages
         run: |
+          mkdir -p bin
+          chmod 777 bin
           docker run --rm \
             -v ${{ github.workspace }}/ucode-docopt:/builder/package/ucode-docopt:ro \
             -v ${{ github.workspace }}/ucode-utest:/builder/package/ucode-utest:ro \
+            -v ${{ github.workspace }}/bin:/builder/bin \
             openwrt/sdk:x86-64-${{ matrix.sdk_version }} \
             sh -c "
               ./scripts/feeds update base &&
@@ -38,3 +42,37 @@ jobs:
               make defconfig &&
               make package/ucode-docopt/compile package/ucode-utest/compile V=s
             "
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.sdk_version }}
+          path: bin/packages/
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Create release
+        run: |
+          PRERELEASE=""
+          echo "${{ github.ref_name }}" | grep -qE '\-(alpha|beta|rc)' && PRERELEASE="--prerelease"
+          gh release create ${{ github.ref_name }} \
+            --verify-tag \
+            --generate-notes \
+            --title "${{ github.ref_name }}" \
+            $PRERELEASE \
+            $(find artifacts -name "*.ipk" -o -name "*.apk" | sort)
+        env:
+          GH_TOKEN: ${{ github.token }}
