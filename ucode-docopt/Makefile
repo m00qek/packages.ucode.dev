@@ -4,11 +4,10 @@ PKG_NAME:=ucode-docopt
 PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 
-PKG_SOURCE_VERSION:=a27433246a6ae728e1510c5ea7ebbd611f127b40
-PKG_SOURCE:=$(PKG_SOURCE_VERSION).tar.gz
-PKG_SOURCE_URL:=https://github.com/m00qek/docopt.uc/archive/
-PKG_HASH:=835f04a56a2bf5c1728ae0b70a10e8fd68064121d0166e70ad50206bfe649ec6
-PKG_BUILD_DIR:=$(BUILD_DIR)/docopt.uc-$(PKG_SOURCE_VERSION)
+PKG_SOURCE:=v$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=https://github.com/m00qek/docopt.uc/archive/refs/tags/
+PKG_HASH:=9e89fbf560231356a8bda77ac2f29aca540988c3625231cc005c4adc9a55dfa4
+PKG_BUILD_DIR:=$(BUILD_DIR)/docopt.uc-$(PKG_VERSION)
 
 PKG_MAINTAINER:=m00qek <m00qek@gmail.com>
 PKG_LICENSE:=MIT
