@@ -41,7 +41,13 @@ jobs:
               ./scripts/feeds install ucode &&
               make defconfig &&
               make package/ucode-docopt/compile package/ucode-utest/compile V=s &&
-              make package/index
+              PKG_DIR=/builder/bin/packages/x86_64/base &&
+              if [ -f /builder/staging_dir/host/bin/opkg-make-index ]; then
+                /builder/staging_dir/host/bin/opkg-make-index \$PKG_DIR > \$PKG_DIR/Packages &&
+                gzip -9 -k \$PKG_DIR/Packages
+              else
+                /builder/staging_dir/host/bin/apk mkndx -o \$PKG_DIR/APKINDEX.tar.gz \$PKG_DIR/*.apk
+              fi
             "
 
       - name: Upload artifacts
