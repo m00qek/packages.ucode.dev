@@ -40,7 +40,8 @@ jobs:
               ./scripts/feeds update base &&
               ./scripts/feeds install ucode &&
               make defconfig &&
-              make package/ucode-docopt/compile package/ucode-utest/compile V=s
+              make package/ucode-docopt/compile package/ucode-utest/compile V=s &&
+              make package/index
             "
 
       - name: Upload artifacts
@@ -73,6 +74,6 @@ jobs:
             --generate-notes \
             --title "${{ github.ref_name }}" \
             $PRERELEASE \
-            $(find artifacts -name "*.ipk" -o -name "*.apk" | sort)
+            $(find artifacts -name "*.ipk" -o -name "*.apk" -o -name "Packages.gz" -o -name "APKINDEX.tar.gz" | sort)
         env:
           GH_TOKEN: ${{ github.token }}
