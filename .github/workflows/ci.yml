@@ -40,6 +40,7 @@ jobs:
               ./scripts/feeds update base &&
               ./scripts/feeds install ucode &&
               make defconfig &&
+              make key-build.pub &&
               make package/ucode-docopt/compile package/ucode-utest/compile V=s &&
               PKG_DIR=/builder/bin/packages/x86_64/base &&
               if [ -f /builder/staging_dir/host/bin/opkg-make-index ]; then
