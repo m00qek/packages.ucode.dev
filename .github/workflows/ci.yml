@@ -95,11 +95,38 @@ jobs:
 
       - name: Regenerate 24.10 index
         run: |
-          chmod 777 24.10
-          docker run --rm \
-            -v ${{ github.workspace }}/24.10:/pkgs \
-            openwrt/sdk:x86-64-24.10.6 \
-            sh -c "/builder/scripts/ipkg-make-index.sh /pkgs > /pkgs/Packages && gzip -9 -k /pkgs/Packages"
+          python3 << 'EOF'
+          import gzip, tarfile, io, os, hashlib
+
+          pkgdir = "24.10"
+          entries = []
+
+          for fname in sorted(f for f in os.listdir(pkgdir) if f.endswith('.ipk')):
+              fpath = os.path.join(pkgdir, fname)
+              data = open(fpath, 'rb').read()
+              sha256 = hashlib.sha256(data).hexdigest()
+              fsize = len(data)
+
+              with gzip.open(io.BytesIO(data)) as gz:
+                  with tarfile.open(fileobj=gz) as outer:
+                      ctl_member = next(m for m in outer.getmembers() if 'control.tar' in m.name)
+                      ctl_tar_data = outer.extractfile(ctl_member).read()
+
+              with gzip.open(io.BytesIO(ctl_tar_data)) as gz2:
+                  with tarfile.open(fileobj=gz2) as inner:
+                      ctl_file = next(m for m in inner.getmembers() if m.name.endswith('control'))
+                      control = inner.extractfile(ctl_file).read().decode().strip()
+
+              entries.append(f"{control}\nFilename: {fname}\nSize: {fsize}\nSHA256sum: {sha256}\n")
+
+          content = '\n'.join(entries) + '\n'
+          open(os.path.join(pkgdir, 'Packages'), 'w').write(content)
+          with open(os.path.join(pkgdir, 'Packages'), 'rb') as fin, \
+               gzip.open(os.path.join(pkgdir, 'Packages.gz'), 'wb', compresslevel=9) as fout:
+              fout.write(fin.read())
+
+          print(f"Indexed {len(entries)} packages")
+          EOF
 
       - name: Regenerate 25.12 index
         env:
