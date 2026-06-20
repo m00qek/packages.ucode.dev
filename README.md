@@ -16,7 +16,7 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 Add the feed to `/etc/opkg/customfeeds.conf`:
 
 ```
-src/gz ucode.dev https://github.com/m00qek/packages.ucode.dev/releases/latest/download
+src/gz ucode.dev https://m00qek.github.io/packages.ucode.dev/24.10
 ```
 
 Then install packages:
@@ -30,7 +30,7 @@ opkg install ucode-utest
 ### OpenWrt 25.12.x (apk)
 
 ```sh
-apk add --repository https://github.com/m00qek/packages.ucode.dev/releases/latest/download \
+apk add --repository https://m00qek.github.io/packages.ucode.dev/25.12 \
   ucode-docopt ucode-utest
 ```
 
@@ -49,11 +49,8 @@ Then:
 ./scripts/feeds install ucode-docopt ucode-utest
 ```
 
-## Releases
+## Feed structure
 
-Packages are built for `x86-64` against OpenWrt 24.10.x and 25.12.x. Each release includes:
-
-- `.ipk` packages + `Packages.gz` index (for opkg / 24.10.x)
-- `.apk` packages + `APKINDEX.tar.gz` index (for apk / 25.12.x)
-
-To update a package version in this feed, bump `PKG_VERSION` and `PKG_HASH` in the relevant `Makefile`, then push a tag.
+Packages are built for `x86-64` against OpenWrt 24.10.x and 25.12.x and published to
+GitHub Pages. All versions accumulate — installing an older version is possible by
+pinning the version in `opkg install` or `apk add`.
