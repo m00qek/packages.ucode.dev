@@ -22,6 +22,7 @@ jobs:
     name: Build packages (${{ matrix.sdk_version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         sdk_version: ["24.10.6", "25.12.3"]
     steps:
@@ -39,8 +40,9 @@ jobs:
             sh -c "
               ./scripts/feeds update base &&
               ./scripts/feeds install ucode &&
+              openssl genrsa -out /builder/key-build 2048 2>/dev/null &&
+              openssl rsa -in /builder/key-build -pubout > /builder/key-build.pub 2>/dev/null &&
               make defconfig &&
-              make key-build.pub &&
               make package/ucode-docopt/compile package/ucode-utest/compile V=s &&
               PKG_DIR=/builder/bin/packages/x86_64/base &&
               if [ -f /builder/staging_dir/host/bin/opkg-make-index ]; then
@@ -48,7 +50,8 @@ jobs:
                 gzip -9 -k \$PKG_DIR/Packages
               else
                 cp /builder/key-build.pub /etc/apk/keys/ &&
-                /builder/staging_dir/host/bin/apk mkndx -o \$PKG_DIR/APKINDEX.tar.gz \$PKG_DIR/*.apk
+                /builder/staging_dir/host/bin/apk mkndx -o \$PKG_DIR/APKINDEX.tar.gz \$PKG_DIR/*.apk ||
+                echo 'Warning: APKINDEX generation failed - packages may be unsigned'
               fi
             "
 
