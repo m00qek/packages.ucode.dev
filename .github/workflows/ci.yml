@@ -46,7 +46,8 @@ jobs:
                 /builder/staging_dir/host/bin/opkg-make-index \$PKG_DIR > \$PKG_DIR/Packages &&
                 gzip -9 -k \$PKG_DIR/Packages
               else
-                /builder/staging_dir/host/bin/apk mkndx --pubkey /builder/key-build.pub -o \$PKG_DIR/APKINDEX.tar.gz \$PKG_DIR/*.apk
+                cp /builder/key-build.pub /etc/apk/keys/ &&
+                /builder/staging_dir/host/bin/apk mkndx -o \$PKG_DIR/APKINDEX.tar.gz \$PKG_DIR/*.apk
               fi
             "
 
