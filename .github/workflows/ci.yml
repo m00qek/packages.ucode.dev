@@ -99,7 +99,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}/24.10:/pkgs \
             openwrt/sdk:x86-64-24.10.6 \
-            sh -c "/builder/staging_dir/host/bin/opkg-make-index /pkgs > /pkgs/Packages && gzip -9 -k /pkgs/Packages"
+            sh -c "make defconfig 2>/dev/null && /builder/staging_dir/host/bin/opkg-make-index /pkgs > /pkgs/Packages && gzip -9 -k /pkgs/Packages"
 
       - name: Regenerate 25.12 index
         env:
@@ -111,6 +111,7 @@ jobs:
             -v ${{ github.workspace }}/25.12:/pkgs \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
+              make defconfig 2>/dev/null &&
               if [ -n \"\${FEED_SIGNING_KEY}\" ]; then
                 printf '%s' \"\${FEED_SIGNING_KEY}\" > /builder/key-build
               else
