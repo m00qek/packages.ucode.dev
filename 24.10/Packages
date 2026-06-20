@@ -364,6 +364,22 @@ Filename: ucode-docopt_1.0.0-r1_all.ipk
 Size: 8064
 SHA256sum: e24638db9e45986854d8150323070575352527a47c5a45f703a7651dda227887
 
+Package: ucode-docopt
+Version: 1.0.1-r1
+Depends: libc, ucode
+Source: feeds/base/ucode-docopt
+SourceName: ucode-docopt
+License: MIT
+Section: libs
+SourceDateEpoch: 1773709139
+Maintainer: m00qek <m00qek@gmail.com>
+Architecture: all
+Installed-Size: 61440
+Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
+Filename: ucode-docopt_1.0.1-r1_all.ipk
+Size: 11336
+SHA256sum: 60a04454f54e2bc971fcb9669588fb2013f7143de77271d680c6354dddf28915
+
 Package: ucode-mod-debug
 Version: 2025.07.18~3f64c808-r1
 Depends: libc, ucode, libubox20240329, libucode20230711
