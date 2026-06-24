@@ -46,10 +46,7 @@ jobs:
             sh -c "
               if [ -n \"\${FEED_SIGNING_KEY}\" ]; then
                 printf '%s' \"\${FEED_SIGNING_KEY}\" > /builder/key-build
-              else
-                openssl genrsa -out /builder/key-build 2048 2>/dev/null
               fi &&
-              openssl rsa -in /builder/key-build -pubout > /builder/key-build.pub 2>/dev/null &&
               ./scripts/feeds update base &&
               ./scripts/feeds install ucode &&
               make defconfig &&
@@ -134,20 +131,28 @@ jobs:
         run: |
           chmod 777 25.12
           docker run --rm \
-            -e FEED_SIGNING_KEY="${FEED_SIGNING_KEY}" \
             -v ${{ github.workspace }}/25.12:/pkgs \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
-              if [ -n \"\${FEED_SIGNING_KEY}\" ]; then
-                printf '%s' \"\${FEED_SIGNING_KEY}\" > /builder/key-build
-              else
-                openssl genrsa -out /builder/key-build 2048 2>/dev/null
-              fi &&
-              openssl rsa -in /builder/key-build -pubout > /builder/key-build.pub 2>/dev/null &&
-              cp /builder/key-build.pub /etc/apk/keys/ &&
               /builder/staging_dir/host/bin/apk mkndx -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk ||
               echo 'Warning: APKINDEX generation failed'
             "
+
+      - name: Sign 24.10 index
+        env:
+          FEED_SIGNING_KEY: ${{ secrets.FEED_SIGNING_KEY }}
+        run: |
+          printf 'untrusted comment: public key 69415029ba91237e\nRWRpQVApupEjfkw39TbIuq1GmjfU23KO6OmGOz6DBxSU/VbyhkE8tQY2\n' \
+            > 24.10/feed.pub
+          if [ -n "$FEED_SIGNING_KEY" ]; then
+            printf '%s' "$FEED_SIGNING_KEY" > /tmp/feed.key
+            docker run --rm \
+              -v /tmp/feed.key:/feed.key:ro \
+              -v ${{ github.workspace }}/24.10:/pkgs \
+              openwrt/sdk:x86-64-24.10.6 \
+              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /feed.key -x /pkgs/Packages.sig
+            rm /tmp/feed.key
+          fi
 
       - name: Commit and push
         run: |
