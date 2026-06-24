@@ -134,7 +134,7 @@ jobs:
             -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
-              /builder/staging_dir/host/bin/apk mkndx -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk ||
+              /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk ||
               echo 'Warning: APKINDEX generation failed'
             "
 
