@@ -86,9 +86,9 @@ jobs:
 
       - name: Copy new packages
         run: |
-          mkdir -p 24.10 25.12
+          mkdir -p 24.10 25.12/x86_64
           find staging/24.10 -name "*.ipk" -exec cp -n {} 24.10/ \;
-          find staging/25.12 -name "*.apk" -exec cp -n {} 25.12/ \;
+          find staging/25.12 -name "*.apk" -exec cp -n {} 25.12/x86_64/ \;
 
       - name: Regenerate 24.10 index
         run: |
@@ -129,9 +129,9 @@ jobs:
         env:
           FEED_SIGNING_KEY: ${{ secrets.FEED_SIGNING_KEY }}
         run: |
-          chmod 777 25.12
+          chmod 777 25.12/x86_64
           docker run --rm \
-            -v ${{ github.workspace }}/25.12:/pkgs \
+            -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
               /builder/staging_dir/host/bin/apk mkndx -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk ||
