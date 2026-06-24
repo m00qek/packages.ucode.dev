@@ -145,7 +145,7 @@ jobs:
           printf 'untrusted comment: public key 69415029ba91237e\nRWRpQVApupEjfkw39TbIuq1GmjfU23KO6OmGOz6DBxSU/VbyhkE8tQY2\n' \
             > 24.10/feed.pub
           if [ -n "$FEED_SIGNING_KEY" ]; then
-            printf '%s' "$FEED_SIGNING_KEY" > /tmp/feed.key
+            printf '%s\n' "$FEED_SIGNING_KEY" > /tmp/feed.key
             docker run --rm \
               -v /tmp/feed.key:/feed.key:ro \
               -v ${{ github.workspace }}/24.10:/pkgs \
