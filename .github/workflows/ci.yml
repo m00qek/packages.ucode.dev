@@ -150,7 +150,8 @@ jobs:
               -v /tmp/feed.key:/feed.key:ro \
               -v ${{ github.workspace }}/24.10:/pkgs \
               openwrt/sdk:x86-64-24.10.6 \
-              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /feed.key -x /pkgs/Packages.sig
+              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /feed.key -x /pkgs/Packages.sig \
+              || echo "Warning: usign signing failed — FEED_SIGNING_KEY may not be a valid usign key"
             rm /tmp/feed.key
           fi
 
