@@ -11,27 +11,37 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 
 ## Installation
 
-### OpenWrt 24.10.x (opkg)
-
-Add the feed to `/etc/opkg/customfeeds.conf`:
-
-```
-src/gz ucode.dev https://m00qek.github.io/packages.ucode.dev/24.10
-```
-
-Then install packages:
-
-```sh
-opkg update
-opkg install ucode-docopt
-opkg install ucode-utest
-```
+All packages are signed. Before installing, you need to add the feed's public key
+so your package manager can verify the packages it downloads.
 
 ### OpenWrt 25.12.x (apk)
 
 ```sh
-apk add --repository https://m00qek.github.io/packages.ucode.dev/25.12 \
-  ucode-docopt ucode-utest
+# Trust the feed's signing key
+wget -O /etc/apk/keys/packages.ucode.dev.pem \
+  https://m00qek.github.io/packages.ucode.dev/25.12/feed.pub.pem
+
+# Add the feed
+echo "https://m00qek.github.io/packages.ucode.dev/25.12" \
+  >> /etc/apk/repositories.d/customfeeds.list
+
+apk update
+apk add ucode-docopt ucode-utest
+```
+
+### OpenWrt 24.10.x (opkg)
+
+```sh
+# Trust the feed's signing key
+wget -O /etc/opkg/keys/a2288d4745630a38 \
+  https://m00qek.github.io/packages.ucode.dev/24.10/feed.pub
+
+# Add the feed
+echo "src/gz ucode.dev https://m00qek.github.io/packages.ucode.dev/24.10" \
+  >> /etc/opkg/customfeeds.conf
+
+opkg update
+opkg install ucode-docopt ucode-utest
 ```
 
 ## Using as a build feed
