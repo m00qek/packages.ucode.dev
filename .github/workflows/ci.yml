@@ -32,21 +32,15 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Build packages
-        env:
-          FEED_SIGNING_KEY: ${{ secrets.FEED_SIGNING_KEY }}
         run: |
           mkdir -p bin
           chmod 777 bin
           docker run --rm \
-            -e FEED_SIGNING_KEY="${FEED_SIGNING_KEY}" \
             -v ${{ github.workspace }}/ucode-docopt:/builder/package/ucode-docopt:ro \
             -v ${{ github.workspace }}/ucode-utest:/builder/package/ucode-utest:ro \
             -v ${{ github.workspace }}/bin:/builder/bin \
             openwrt/sdk:x86-64-${{ matrix.sdk_version }} \
             sh -c "
-              if [ -n \"\${FEED_SIGNING_KEY}\" ]; then
-                printf '%s' \"\${FEED_SIGNING_KEY}\" > /builder/key-build
-              fi &&
               ./scripts/feeds update base &&
               ./scripts/feeds install ucode &&
               make defconfig &&
@@ -90,21 +84,35 @@ jobs:
           find staging/24.10 -name "*.ipk" -exec cp -n {} 24.10/ \;
           find staging/25.12 -name "*.apk" -exec cp -n {} 25.12/x86_64/ \;
 
-      - name: Sort 25.12 packages by architecture
+      - name: Sort and sign 25.12 packages
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
         run: |
           chmod 777 25.12/x86_64 25.12/noarch
+          if [ -n "$APK_FEED_SIGNING_KEY" ]; then
+            printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
+          fi
           docker run --rm \
+            $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
             -v ${{ github.workspace }}/25.12/x86_64:/x86_64 \
             -v ${{ github.workspace }}/25.12/noarch:/noarch \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
+              if [ -f /apk.key ]; then
+                for pkg in /x86_64/*.apk; do
+                  /builder/staging_dir/host/bin/apk adbsign \
+                    --allow-untrusted --reset-signatures \
+                    --sign-key /apk.key \"\$pkg\" 2>/dev/null
+                done
+              fi
               for pkg in /x86_64/*.apk; do
                 arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
                 if [ \"\$arch\" = noarch ]; then
-                  cp -n \"\$pkg\" /noarch/
+                  cp \"\$pkg\" /noarch/
                 fi
               done
             "
+          rm -f /tmp/apk.key
 
       - name: Regenerate 24.10 index
         run: |
@@ -142,8 +150,6 @@ jobs:
           EOF
 
       - name: Regenerate 25.12 index
-        env:
-          FEED_SIGNING_KEY: ${{ secrets.FEED_SIGNING_KEY }}
         run: |
           chmod 777 25.12/x86_64
           docker run --rm \
@@ -154,22 +160,38 @@ jobs:
               echo 'Warning: APKINDEX generation failed'
             "
 
+      - name: Sign 25.12 index
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
+        run: |
+          git show origin/main:apk.pub > 25.12/feed.pub.pem
+          if [ -n "$APK_FEED_SIGNING_KEY" ]; then
+            chmod 777 25.12/x86_64
+            printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
+            docker run --rm \
+              -v /tmp/apk.key:/apk.key:ro \
+              -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
+              openwrt/sdk:x86-64-25.12.3 \
+              /builder/staging_dir/host/bin/apk adbsign \
+                --allow-untrusted --reset-signatures \
+                --sign-key /apk.key /pkgs/APKINDEX.tar.gz
+            rm /tmp/apk.key
+          fi
+
       - name: Sign 24.10 index
         env:
-          FEED_SIGNING_KEY: ${{ secrets.FEED_SIGNING_KEY }}
+          OPKG_FEED_SIGNING_KEY: ${{ secrets.OPKG_FEED_SIGNING_KEY }}
         run: |
-          printf 'untrusted comment: public key 69415029ba91237e\nRWRpQVApupEjfkw39TbIuq1GmjfU23KO6OmGOz6DBxSU/VbyhkE8tQY2\n' \
-            > 24.10/feed.pub
-          if [ -n "$FEED_SIGNING_KEY" ]; then
+          git show origin/main:opkg.pub > 24.10/feed.pub
+          if [ -n "$OPKG_FEED_SIGNING_KEY" ]; then
             chmod -R 777 24.10
-            KEYDATA=$(printf '%s\n' "$FEED_SIGNING_KEY" | grep -v '^untrusted comment' | head -1)
-            printf 'untrusted comment: private key 69415029ba91237e\n%s\n' "$KEYDATA" > /tmp/feed.key
+            printf '%s' "$OPKG_FEED_SIGNING_KEY" > /tmp/opkg.key
             docker run --rm \
-              -v /tmp/feed.key:/feed.key:ro \
+              -v /tmp/opkg.key:/opkg.key:ro \
               -v ${{ github.workspace }}/24.10:/pkgs \
               openwrt/sdk:x86-64-24.10.6 \
-              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /feed.key -x /pkgs/Packages.sig
-            rm /tmp/feed.key
+              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
+            rm /tmp/opkg.key
           fi
 
       - name: Commit and push
