@@ -86,9 +86,25 @@ jobs:
 
       - name: Copy new packages
         run: |
-          mkdir -p 24.10 25.12/x86_64
+          mkdir -p 24.10 25.12/x86_64 25.12/noarch
           find staging/24.10 -name "*.ipk" -exec cp -n {} 24.10/ \;
           find staging/25.12 -name "*.apk" -exec cp -n {} 25.12/x86_64/ \;
+
+      - name: Sort 25.12 packages by architecture
+        run: |
+          chmod 777 25.12/x86_64 25.12/noarch
+          docker run --rm \
+            -v ${{ github.workspace }}/25.12/x86_64:/x86_64 \
+            -v ${{ github.workspace }}/25.12/noarch:/noarch \
+            openwrt/sdk:x86-64-25.12.3 \
+            sh -c "
+              for pkg in /x86_64/*.apk; do
+                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
+                if [ \"\$arch\" = noarch ]; then
+                  cp -n \"\$pkg\" /noarch/
+                fi
+              done
+            "
 
       - name: Regenerate 24.10 index
         run: |
