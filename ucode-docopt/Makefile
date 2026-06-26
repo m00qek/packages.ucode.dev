@@ -1,12 +1,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ucode-docopt
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 
 PKG_SOURCE:=v$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/m00qek/docopt.uc/archive/refs/tags/
-PKG_HASH:=ca4131e67f363e190cced9863787d0d108a7f687986b6651423581338cea8ff6
+PKG_HASH:=715644f4d7f73c7aa3fcb8e42f666fc350c4f0afc95cc1c25f2e8e41cf48fd88
 PKG_BUILD_DIR:=$(BUILD_DIR)/docopt.uc-$(PKG_VERSION)
 
 PKG_MAINTAINER:=m00qek <m00qek@gmail.com>
