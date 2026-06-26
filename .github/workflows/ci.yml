@@ -81,8 +81,8 @@ jobs:
       - name: Copy new packages
         run: |
           mkdir -p 24.10 25.12/x86_64 25.12/noarch
-          find staging/24.10 -name "*.ipk" -exec cp -n {} 24.10/ \;
-          find staging/25.12 -name "*.apk" -exec cp -n {} 25.12/x86_64/ \;
+          find staging/24.10 \( -name "ucode-docopt_*.ipk" -o -name "ucode-utest_*.ipk" \) -exec cp -n {} 24.10/ \;
+          find staging/25.12 \( -name "ucode-docopt-*.apk" -o -name "ucode-utest-*.apk" \) -exec cp -n {} 25.12/x86_64/ \;
 
       - name: Sort and sign 25.12 packages
         env:
