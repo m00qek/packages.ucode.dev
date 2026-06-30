@@ -119,8 +119,9 @@ jobs:
           chmod -R 777 24.10
           docker run --rm \
             -v ${{ github.workspace }}/24.10:/pkgs \
+            -e MKHASH=/builder/staging_dir/host/bin/mkhash \
             openwrt/sdk:x86-64-24.10.6 \
-            sh -c "/builder/scripts/ipkg-make-index.sh /pkgs > /pkgs/Packages && gzip -9c /pkgs/Packages > /pkgs/Packages.gz"
+            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
 
       - name: Regenerate 25.12 index
         run: |
