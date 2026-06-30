@@ -9,10 +9,10 @@ SourceDateEpoch: 1773709139
 Maintainer: m00qek <m00qek@gmail.com>
 Architecture: all
 Installed-Size: 40960
-Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 Filename: ucode-docopt_1.0.0-r1_all.ipk
 Size: 8064
 SHA256sum: e24638db9e45986854d8150323070575352527a47c5a45f703a7651dda227887
+Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 
 Package: ucode-docopt
 Version: 1.0.1-r1
@@ -25,10 +25,10 @@ SourceDateEpoch: 1773709139
 Maintainer: m00qek <m00qek@gmail.com>
 Architecture: all
 Installed-Size: 61440
-Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 Filename: ucode-docopt_1.0.1-r1_all.ipk
 Size: 11336
 SHA256sum: 60a04454f54e2bc971fcb9669588fb2013f7143de77271d680c6354dddf28915
+Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 
 Package: ucode-docopt
 Version: 1.0.2-r1
@@ -41,10 +41,10 @@ SourceDateEpoch: 1773709139
 Maintainer: m00qek <m00qek@gmail.com>
 Architecture: all
 Installed-Size: 61440
-Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 Filename: ucode-docopt_1.0.2-r1_all.ipk
 Size: 11579
 SHA256sum: f13b9589c338f9e9b1e6e55152159e437e36a6e703698da1bb956c60e7de1601
+Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 
 Package: ucode-utest
 Version: 0.9.0-r1
@@ -59,12 +59,12 @@ URL: https://github.com/m00qek/utest
 Maintainer: António Mora <oliveira.fh42@gmail.com>
 Architecture: all
 Installed-Size: 102400
-Description:  A modern, non-invasive testing framework for the ucode ecosystem.
- Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
- uloop, and uclient, and both sequential and parallel test runners.
 Filename: ucode-utest_0.9.0-r1_all.ipk
 Size: 19300
 SHA256sum: 22b09d42fc4868b562e9ec6c13646fb0ebdebf501e58a74cf49e8b8aa80fb557
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
 
 Package: ucode-utest
 Version: 1.0.0-r1
@@ -79,12 +79,12 @@ URL: https://github.com/m00qek/utest
 Maintainer: António Mora <oliveira.fh42@gmail.com>
 Architecture: all
 Installed-Size: 102400
-Description:  A modern, non-invasive testing framework for the ucode ecosystem.
- Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
- uloop, and uclient, and both sequential and parallel test runners.
 Filename: ucode-utest_1.0.0-r1_all.ipk
 Size: 19449
 SHA256sum: bdd5f76c50ccaac1777564fddec730452192e7db3055dc7122cc19d33cd380a6
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
 
 Package: ucode-utest
 Version: 1.1.0-r1
@@ -99,12 +99,12 @@ URL: https://github.com/m00qek/utest
 Maintainer: António Mora <oliveira.fh42@gmail.com>
 Architecture: all
 Installed-Size: 112640
-Description:  A modern, non-invasive testing framework for the ucode ecosystem.
- Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
- uloop, and uclient, and both sequential and parallel test runners.
 Filename: ucode-utest_1.1.0-r1_all.ipk
 Size: 21203
 SHA256sum: 9d561455a612960d25d01ace8cfa9da2c1a5467d70212129e1cbebe224138638
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
 
 Package: ucode-utest
 Version: 1.2.0-r1
@@ -119,12 +119,12 @@ URL: https://github.com/m00qek/utest
 Maintainer: António Mora <oliveira.fh42@gmail.com>
 Architecture: all
 Installed-Size: 112640
-Description:  A modern, non-invasive testing framework for the ucode ecosystem.
- Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
- uloop, and uclient, and both sequential and parallel test runners.
 Filename: ucode-utest_1.2.0-r1_all.ipk
 Size: 21352
 SHA256sum: e35a7a359c1e967bc519f8b2eba55a9efe2e9825969c2c77fe361a809c9bce67
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
 
 Package: ucode-utest
 Version: 1.2.1-r1
@@ -139,12 +139,12 @@ URL: https://github.com/m00qek/utest
 Maintainer: António Mora <oliveira.fh42@gmail.com>
 Architecture: all
 Installed-Size: 112640
-Description:  A modern, non-invasive testing framework for the ucode ecosystem.
- Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
- uloop, and uclient, and both sequential and parallel test runners.
 Filename: ucode-utest_1.2.1-r1_all.ipk
 Size: 21406
 SHA256sum: 10f6fed3b72e2ee4c349b9012b503ef0ba41b1e4e042f79b2fe35e498f3816e4
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
 
 Package: ucode-utest
 Version: 1.3.0-r1
@@ -159,10 +159,30 @@ URL: https://github.com/m00qek/utest
 Maintainer: António Mora <oliveira.fh42@gmail.com>
 Architecture: all
 Installed-Size: 163840
-Description:  A modern, non-invasive testing framework for the ucode ecosystem.
- Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
- uloop, and uclient, and both sequential and parallel test runners.
 Filename: ucode-utest_1.3.0-r1_all.ipk
 Size: 32785
 SHA256sum: 4b4d7d5f103dcb89022a864b58f273876c95755bea8f107090706a7c7a44a239
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
+
+Package: ucode-utest
+Version: 1.4.0-r1
+Depends: libc, ucode
+Source: feeds/base/ucode-utest
+SourceName: ucode-utest
+License: MIT
+LicenseFiles: LICENSE
+Section: devel
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/utest
+Maintainer: António Mora <oliveira.fh42@gmail.com>
+Architecture: all
+Installed-Size: 184320
+Filename: ucode-utest_1.4.0-r1_all.ipk
+Size: 40002
+SHA256sum: ac431512e27b75a3aab9aa0511c50980cef6309231b25d9b63196fce5a74dd6a
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
 
