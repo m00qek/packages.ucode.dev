@@ -186,3 +186,23 @@ Description:  A modern, non-invasive testing framework for the ucode ecosystem.
  Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
  uloop, and uclient, and both sequential and parallel test runners.
 
+Package: ucode-utest
+Version: 1.5.0-r1
+Depends: libc, ucode
+Source: feeds/base/ucode-utest
+SourceName: ucode-utest
+License: MIT
+LicenseFiles: LICENSE
+Section: devel
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/utest
+Maintainer: António Mora <oliveira.fh42@gmail.com>
+Architecture: all
+Installed-Size: 245760
+Filename: ucode-utest_1.5.0-r1_all.ipk
+Size: 63516
+SHA256sum: 187d7f85e7af24c659c07f6c2b78f413ddd8735760e2677968e3f5219c9fb503
+Description:  A modern, non-invasive testing framework for the ucode ecosystem.
+ Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs,
+ uloop, and uclient, and both sequential and parallel test runners.
+
