@@ -17,12 +17,19 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.arch }} (${{ matrix.release.sdk_version }})
+    name: Build ${{ matrix.arch.pkg }} (${{ matrix.release.sdk_version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86-64, aarch64_generic, aarch64_cortex-a53]
+        # sdk = the SDK image tag, pkg = the OpenWrt package architecture.
+        # They differ for x86 (x86-64 vs x86_64), and it is `pkg` that clients
+        # look for: apk fetches <repo-url>/<pkg>/APKINDEX.tar.gz. Publishing
+        # under the SDK name puts the packages somewhere apk never looks.
+        arch:
+          - { sdk: x86-64,             pkg: x86_64 }
+          - { sdk: aarch64_generic,    pkg: aarch64_generic }
+          - { sdk: aarch64_cortex-a53, pkg: aarch64_cortex-a53 }
         release:
           - { sdk_version: "24.10.6", feed_dir: "24.10" }
           - { sdk_version: "25.12.3", feed_dir: "25.12" }
@@ -36,7 +43,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}/luci-sso:/builder/package/luci-sso:ro \
             -v ${{ github.workspace }}/bin:/builder/bin \
-            openwrt/sdk:${{ matrix.arch }}-${{ matrix.release.sdk_version }} \
+            openwrt/sdk:${{ matrix.arch.sdk }}-${{ matrix.release.sdk_version }} \
             sh -c "
               ./scripts/feeds update -a &&
               ./scripts/feeds install -a &&
@@ -49,14 +56,14 @@ jobs:
           mkdir -p out
           find bin -type f \( -name 'luci-sso*.ipk' -o -name 'luci-sso*.apk' \) \
             -exec cp {} out/ \;
-          echo "Built for ${{ matrix.arch }} / ${{ matrix.release.sdk_version }}:"
+          echo "Built for ${{ matrix.arch.pkg }} / ${{ matrix.release.sdk_version }}:"
           ls -1 out
           # A green build that produced nothing is a silent failure, not a pass.
           [ -n "$(ls -A out)" ] || { echo "ERROR: no packages produced" >&2; exit 1; }
 
       - uses: actions/upload-artifact@v7
         with:
-          name: luci-sso-${{ matrix.arch }}-${{ matrix.release.feed_dir }}
+          name: luci-sso-${{ matrix.arch.pkg }}-${{ matrix.release.feed_dir }}
           path: out/
 
   deploy:
