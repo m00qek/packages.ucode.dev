@@ -60,6 +60,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # Shared with luci-sso.yml's deploy job: both commit to gh-pages, and two
+    # concurrent runs would clobber each other's index.
+    concurrency:
+      group: feed-gh-pages
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:

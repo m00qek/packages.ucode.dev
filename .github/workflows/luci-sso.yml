@@ -1,0 +1,152 @@
+name: luci-sso
+
+# Compile-only, by design. luci-sso's own CI already runs unit, e2e and fuzz
+# across 2 OpenWrt versions x 3 crypto backends on every change and on the tag
+# it is built from, so re-running them here would add latency and no signal.
+# What this workflow *does* add is architecture coverage: luci-sso's CI derives
+# its SDK arch from the runner (uname -m), so it only ever compiles x86-64.
+# These jobs are the only thing that builds the C extension for aarch64.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'luci-sso/**'
+      - '.github/workflows/luci-sso.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} (${{ matrix.release.sdk_version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86-64, aarch64_generic, aarch64_cortex-a53]
+        release:
+          - { sdk_version: "24.10.6", feed_dir: "24.10" }
+          - { sdk_version: "25.12.3", feed_dir: "25.12" }
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build packages
+        run: |
+          mkdir -p bin
+          chmod 777 bin
+          docker run --rm \
+            -v ${{ github.workspace }}/luci-sso:/builder/package/luci-sso:ro \
+            -v ${{ github.workspace }}/bin:/builder/bin \
+            openwrt/sdk:${{ matrix.arch }}-${{ matrix.release.sdk_version }} \
+            sh -c "
+              ./scripts/feeds update -a &&
+              ./scripts/feeds install -a &&
+              make defconfig &&
+              make package/luci-sso/compile -j\$(nproc) V=s
+            "
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          find bin -type f \( -name 'luci-sso*.ipk' -o -name 'luci-sso*.apk' \) \
+            -exec cp {} out/ \;
+          echo "Built for ${{ matrix.arch }} / ${{ matrix.release.sdk_version }}:"
+          ls -1 out
+          # A green build that produced nothing is a silent failure, not a pass.
+          [ -n "$(ls -A out)" ] || { echo "ERROR: no packages produced" >&2; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: luci-sso-${{ matrix.arch }}-${{ matrix.release.feed_dir }}
+          path: out/
+
+  deploy:
+    name: Publish to feed
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Shared with ci.yml's deploy job: both commit to gh-pages, and two
+    # concurrent runs would clobber each other's index.
+    concurrency:
+      group: feed-gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: staging
+          pattern: luci-sso-*
+
+      - name: Sort packages into per-arch directories
+        run: |
+          set -eu
+          # luci-sso ships a compiled native.so, so unlike ucode-utest/ucode-docopt
+          # (PKGARCH:=all) every package is architecture-specific and needs its own
+          # directory and index. noarch packages stay where they are at the feed
+          # root, so existing feed URLs keep working unchanged.
+          for d in staging/luci-sso-*; do
+            [ -d "$d" ] || continue
+            name=$(basename "$d")                       # luci-sso-<arch>-<feed_dir>
+            feed_dir=${name##*-}                        # 24.10 | 25.12
+            arch=${name#luci-sso-}; arch=${arch%-*}     # x86-64 | aarch64_*
+            mkdir -p "$feed_dir/$arch"
+            cp -n "$d"/* "$feed_dir/$arch/" 2>/dev/null || true
+            echo "$feed_dir/$arch:"; ls -1 "$feed_dir/$arch"
+          done
+
+      - name: Regenerate and sign per-arch indexes
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
+          OPKG_FEED_SIGNING_KEY: ${{ secrets.OPKG_FEED_SIGNING_KEY }}
+        run: |
+          set -eu
+          [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
+          [ -n "${OPKG_FEED_SIGNING_KEY:-}" ] && printf '%s' "$OPKG_FEED_SIGNING_KEY" > /tmp/opkg.key || true
+
+          for dir in 24.10/*/ ; do
+            [ -d "$dir" ] || continue
+            chmod -R 777 "$dir"
+            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -e MKHASH=/builder/staging_dir/host/bin/mkhash \
+              openwrt/sdk:x86-64-24.10.6 \
+              sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
+            if [ -f /tmp/opkg.key ]; then
+              docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                openwrt/sdk:x86-64-24.10.6 \
+                /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
+            fi
+          done
+
+          for dir in 25.12/*/ ; do
+            [ -d "$dir" ] || continue
+            case "$dir" in 25.12/noarch/) continue ;; esac
+            chmod -R 777 "$dir"
+            if [ -f /tmp/apk.key ]; then
+              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                openwrt/sdk:x86-64-25.12.3 \
+                sh -c "for p in /pkgs/*.apk; do /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures --sign-key /apk.key \"\$p\" 2>/dev/null || true; done"
+            fi
+            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              openwrt/sdk:x86-64-25.12.3 \
+              sh -c "/builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk"
+            if [ -f /tmp/apk.key ]; then
+              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                openwrt/sdk:x86-64-25.12.3 \
+                /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures \
+                  --sign-key /apk.key /pkgs/APKINDEX.tar.gz
+            fi
+          done
+          rm -f /tmp/apk.key /tmp/opkg.key
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 24.10/ 25.12/
+          git diff --staged --quiet || git commit -m "publish luci-sso packages"
+          git push

@@ -1,0 +1,145 @@
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=luci-sso
+PKG_VERSION:=0.9.1
+PKG_RELEASE:=1
+
+PKG_SOURCE:=v$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=https://github.com/m00qek/luci-sso/archive/refs/tags/
+PKG_HASH:=de5a8c1b5c55f548fa959428d4e905bcfcae50424bc6b358ee87d933a6a96cce
+PKG_BUILD_DIR:=$(BUILD_DIR)/luci-sso-$(PKG_VERSION)
+
+PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
+PKG_LICENSE:=MIT
+PKG_LICENSE_FILES:=LICENSE
+
+PKG_INSTALL:=1
+PKG_BUILD_DEPENDS:=libucode/host
+PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode
+
+include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/cmake.mk
+
+define Package/$(PKG_NAME)
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=OIDC/OAuth2 SSO for LuCI
+  URL:=https://github.com/m00qek/luci-sso
+  DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto +luci-base
+endef
+
+define Package/$(PKG_NAME)/description
+  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+endef
+
+define Package/$(PKG_NAME)/conffiles
+/etc/config/luci-sso
+endef
+
+define Package/$(PKG_NAME)-crypto-mbedtls
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=MbedTLS backend for $(PKG_NAME)
+  URL:=https://github.com/m00qek/luci-sso
+  DEPENDS:=+libucode +libmbedtls
+  PROVIDES:=luci-sso-crypto
+endef
+
+define Package/$(PKG_NAME)-crypto-wolfssl
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=WolfSSL backend for $(PKG_NAME)
+  URL:=https://github.com/m00qek/luci-sso
+  DEPENDS:=+libucode +libwolfssl
+  PROVIDES:=luci-sso-crypto
+endef
+
+define Package/$(PKG_NAME)-crypto-openssl
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=OpenSSL backend for $(PKG_NAME)
+  URL:=https://github.com/m00qek/luci-sso
+  DEPENDS:=+libucode +libopenssl
+  PROVIDES:=luci-sso-crypto
+endef
+
+# The release tarball keeps the C sources under mod/, but cmake.mk expects
+# CMakeLists.txt at the root of PKG_BUILD_DIR. Unpack normally, then lift mod/
+# up one level — the in-tree Makefile copies ./mod/* for the same reason.
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	$(CP) $(PKG_BUILD_DIR)/mod/. $(PKG_BUILD_DIR)/
+endef
+
+define Package/$(PKG_NAME)/install
+	$(INSTALL_DIR) $(1)/usr/share/ucode
+	$(CP) $(PKG_BUILD_DIR)/src/luci_sso $(1)/usr/share/ucode/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(CP) $(PKG_BUILD_DIR)/files/etc/config/luci-sso $(1)/etc/config/luci-sso
+	$(INSTALL_DIR) $(1)/etc/luci-sso
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/etc/uci-defaults/10-luci-sso-setup $(1)/etc/uci-defaults/10-luci-sso-setup
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
+	$(INSTALL_DIR) $(1)/www/cgi-bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
+	$(INSTALL_DIR) $(1)/www/luci-static/resources
+	$(CP) $(PKG_BUILD_DIR)/files/www/luci-static/resources/luci-sso-login.js $(1)/www/luci-static/resources/
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/services
+	$(CP) $(PKG_BUILD_DIR)/files/www/luci-static/resources/view/services/sso.js $(1)/www/luci-static/resources/view/services/
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(CP) $(PKG_BUILD_DIR)/files/usr/share/luci/menu.d/luci-app-sso.json $(1)/usr/share/luci/menu.d/
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
+	$(CP) $(PKG_BUILD_DIR)/files/usr/share/rpcd/acl.d/luci-app-sso.json $(1)/usr/share/rpcd/acl.d/
+endef
+define Package/$(PKG_NAME)/prerm
+#!/bin/sh
+# Clean up cron job
+sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
+[ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart
+
+# Revert UI patches
+sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
+# Glob, to mirror 99-luci-sso-ui: revert every theme that was patched, including
+# ones that did not exist when this was written.
+for f in /usr/share/ucode/luci/template/themes/*/sysauth.ut; do
+	[ -f "$f" ] && sed -i '/luci-sso-login.js/d' "$f" 2>/dev/null
+done
+
+# Remove the SSO ACL entry and reload rpcd so the permission is revoked
+# immediately. opkg removes the file after prerm exits, so we delete it here
+# first; opkg's own removal becomes a harmless no-op.
+rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
+[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+
+# Clear LuCI cache to reflect removal
+rm -rf /tmp/luci-modulecache/* 2>/dev/null
+rm -rf /tmp/luci-indexcache 2>/dev/null
+
+exit 0
+endef
+
+
+define Package/$(PKG_NAME)-crypto-mbedtls/install
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
+	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so ] && \
+		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so $(1)/usr/lib/ucode/luci_sso/native.so || true
+endef
+
+define Package/$(PKG_NAME)-crypto-wolfssl/install
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
+	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so ] && \
+		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
+endef
+
+define Package/$(PKG_NAME)-crypto-openssl/install
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
+	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so ] && \
+		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
+endef
+
+$(eval $(call BuildPackage,$(PKG_NAME)))
+$(eval $(call BuildPackage,$(PKG_NAME)-crypto-mbedtls))
+$(eval $(call BuildPackage,$(PKG_NAME)-crypto-wolfssl))
+$(eval $(call BuildPackage,$(PKG_NAME)-crypto-openssl))
