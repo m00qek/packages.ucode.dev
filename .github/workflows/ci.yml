@@ -93,7 +93,11 @@ jobs:
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
         run: |
-          chmod 777 25.12/x86_64 25.12/noarch
+          # Recursive: the SDK image runs as uid 1000 (buildbot), so overwriting a file
+          # checked out with another owner needs write permission on the FILE. A 777
+          # directory only allows creating new ones, so this broke the moment these
+          # directories held committed packages that had to be replaced.
+          chmod -R 777 25.12/x86_64 25.12/noarch
           if [ -n "$APK_FEED_SIGNING_KEY" ]; then
             printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
           fi
@@ -130,7 +134,7 @@ jobs:
 
       - name: Regenerate 25.12 index
         run: |
-          chmod 777 25.12/x86_64
+          chmod -R 777 25.12/x86_64
           docker run --rm \
             -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
             openwrt/sdk:x86-64-25.12.3 \
@@ -145,7 +149,7 @@ jobs:
         run: |
           git show origin/main:apk.pub > 25.12/feed.pub.pem
           if [ -n "$APK_FEED_SIGNING_KEY" ]; then
-            chmod 777 25.12/x86_64
+            chmod -R 777 25.12/x86_64
             printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
             docker run --rm \
               -v /tmp/apk.key:/apk.key:ro \
