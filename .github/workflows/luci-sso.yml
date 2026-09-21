@@ -117,13 +117,15 @@ jobs:
 
           for dir in 24.10/*/ ; do
             [ -d "$dir" ] || continue
-            chmod -R 777 "$dir"
+            chmod -R 777 "$dir" || true
             docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              --user $(id -u):$(id -g) \
               -e MKHASH=/builder/staging_dir/host/bin/mkhash \
               openwrt/sdk:x86-64-24.10.6 \
               sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
             if [ -f /tmp/opkg.key ]; then
               docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                --user $(id -u):$(id -g) \
                 openwrt/sdk:x86-64-24.10.6 \
                 /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
             fi
@@ -132,17 +134,20 @@ jobs:
           for dir in 25.12/*/ ; do
             [ -d "$dir" ] || continue
             case "$dir" in 25.12/noarch/) continue ;; esac
-            chmod -R 777 "$dir"
+            chmod -R 777 "$dir" || true
             if [ -f /tmp/apk.key ]; then
               docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                --user $(id -u):$(id -g) \
                 openwrt/sdk:x86-64-25.12.3 \
                 sh -c "for p in /pkgs/*.apk; do /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures --sign-key /apk.key \"\$p\" 2>/dev/null || true; done"
             fi
             docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              --user $(id -u):$(id -g) \
               openwrt/sdk:x86-64-25.12.3 \
               sh -c "/builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk"
             if [ -f /tmp/apk.key ]; then
               docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                --user $(id -u):$(id -g) \
                 openwrt/sdk:x86-64-25.12.3 \
                 /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures \
                   --sign-key /apk.key /pkgs/APKINDEX.tar.gz

@@ -97,11 +97,12 @@ jobs:
           # checked out with another owner needs write permission on the FILE. A 777
           # directory only allows creating new ones, so this broke the moment these
           # directories held committed packages that had to be replaced.
-          chmod -R 777 25.12/x86_64 25.12/noarch
+          chmod -R 777 25.12/x86_64 25.12/noarch || true
           if [ -n "$APK_FEED_SIGNING_KEY" ]; then
             printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
           fi
           docker run --rm \
+            --user $(id -u):$(id -g) \
             $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
             -v ${{ github.workspace }}/25.12/x86_64:/x86_64 \
             -v ${{ github.workspace }}/25.12/noarch:/noarch \
@@ -125,8 +126,9 @@ jobs:
 
       - name: Regenerate 24.10 index
         run: |
-          chmod -R 777 24.10
+          chmod -R 777 24.10 || true
           docker run --rm \
+            --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}/24.10:/pkgs \
             -e MKHASH=/builder/staging_dir/host/bin/mkhash \
             openwrt/sdk:x86-64-24.10.6 \
@@ -134,8 +136,9 @@ jobs:
 
       - name: Regenerate 25.12 index
         run: |
-          chmod -R 777 25.12/x86_64
+          chmod -R 777 25.12/x86_64 || true
           docker run --rm \
+            --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
@@ -149,9 +152,10 @@ jobs:
         run: |
           git show origin/main:apk.pub > 25.12/feed.pub.pem
           if [ -n "$APK_FEED_SIGNING_KEY" ]; then
-            chmod -R 777 25.12/x86_64
+            chmod -R 777 25.12/x86_64 || true
             printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
             docker run --rm \
+              --user $(id -u):$(id -g) \
               -v /tmp/apk.key:/apk.key:ro \
               -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
               openwrt/sdk:x86-64-25.12.3 \
@@ -167,9 +171,10 @@ jobs:
         run: |
           git show origin/main:opkg.pub > 24.10/feed.pub
           if [ -n "$OPKG_FEED_SIGNING_KEY" ]; then
-            chmod -R 777 24.10
+            chmod -R 777 24.10 || true
             printf '%s' "$OPKG_FEED_SIGNING_KEY" > /tmp/opkg.key
             docker run --rm \
+              --user $(id -u):$(id -g) \
               -v /tmp/opkg.key:/opkg.key:ro \
               -v ${{ github.workspace }}/24.10:/pkgs \
               openwrt/sdk:x86-64-24.10.6 \
