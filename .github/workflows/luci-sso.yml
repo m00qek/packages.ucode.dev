@@ -10,9 +10,13 @@ name: luci-sso
 on:
   push:
     branches: [main, master]
+    # A negated pattern after the others drops a file matched earlier, so a
+    # push that changes only Markdown files, e.g. luci-sso/README.md, does not
+    # build or publish. paths and paths-ignore cannot both be set on one event.
     paths:
       - 'luci-sso/**'
       - '.github/workflows/luci-sso.yml'
+      - '!**/*.md'
   workflow_dispatch:
 
 jobs:
