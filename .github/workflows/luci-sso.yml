@@ -98,8 +98,8 @@ jobs:
           set -eu
           # luci-sso ships a compiled native.so, so unlike ucode-utest/ucode-docopt
           # (PKGARCH:=all) every package is architecture-specific and needs its own
-          # directory and index. noarch packages stay where they are at the feed
-          # root, so existing feed URLs keep working unchanged.
+          # directory and index. On 25.12 each arch index also lists the noarch
+          # packages that ci.yml publishes under 25.12/noarch/.
           for d in staging/luci-sso-*; do
             [ -d "$d" ] || continue
             name=$(basename "$d")                       # luci-sso-<arch>-<feed_dir>
@@ -166,6 +166,13 @@ jobs:
               /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
           fi
 
+          # apk only installs what the router's own <arch>/APKINDEX.tar.gz
+          # lists, so each index also lists the newest noarch packages
+          # (ucode-utest, ucode-docopt), which ci.yml publishes under
+          # 25.12/noarch/; apk downloads them from there. ci.yml runs the same
+          # loop over the same directories, so whichever workflow publishes
+          # last, no index loses the other's packages.
+          mkdir -p 25.12/noarch
           for dir in 25.12/*/ ; do
             [ -d "$dir" ] || continue
             case "$dir" in 25.12/noarch/) continue ;; esac
@@ -177,10 +184,16 @@ jobs:
                 sh -c "for p in /pkgs/*.apk; do /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures --sign-key /apk.key \"\$p\" 2>/dev/null || true; done"
             fi
             docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -v ${{ github.workspace }}/25.12/noarch:/noarch:ro \
               -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
               --user $(id -u):$(id -g) \
               openwrt/sdk:x86-64-25.12.3 \
-              sh -c "newest=\$(sh /newest-only-index.sh apk /pkgs/*.apk) &&
+              sh -c "set -e
+                     files=
+                     for f in /noarch/*.apk /pkgs/*.apk; do
+                       if [ -f \"\$f\" ]; then files=\"\$files \$f\"; fi
+                     done
+                     newest=\$(sh /newest-only-index.sh apk \$files)
                      /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest"
             if [ -f /tmp/apk.key ]; then
               docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \

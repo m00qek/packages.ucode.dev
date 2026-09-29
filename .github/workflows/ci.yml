@@ -83,11 +83,10 @@ jobs:
           name: packages-25.12
           path: staging/25.12
 
-      - name: Copy new packages
+      - name: Copy new 24.10 packages
         run: |
-          mkdir -p 24.10 25.12/x86_64 25.12/noarch
+          mkdir -p 24.10
           find staging/24.10 \( -name "ucode-docopt_*.ipk" -o -name "ucode-utest_*.ipk" \) -exec cp -n {} 24.10/ \;
-          find staging/25.12 \( -name "ucode-docopt-*.apk" -o -name "ucode-utest-*.apk" \) -exec cp -n {} 25.12/x86_64/ \;
 
       # Every package file stays on gh-pages so direct-download rollbacks keep
       # working, but each index lists only the newest version of a package, as
@@ -95,40 +94,47 @@ jobs:
       - name: Fetch the newest-only index filter
         run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
 
-      - name: Sort and sign 25.12 packages
+      # apk packages are signed in a scratch directory, then filed under
+      # 25.12/<their own arch>/. ucode-docopt and ucode-utest are noarch, and
+      # apk downloads a noarch package from <repo>/noarch/ whichever arch index
+      # listed it, so 25.12/noarch/ is where they are published. A version
+      # already published is never replaced.
+      - name: Sign and sort new 25.12 packages
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
         run: |
-          # Recursive: the SDK image runs as uid 1000 (buildbot), so overwriting a file
-          # checked out with another owner needs write permission on the FILE. A 777
-          # directory only allows creating new ones, so this broke the moment these
-          # directories held committed packages that had to be replaced.
-          chmod -R 777 25.12/x86_64 25.12/noarch || true
+          set -eu
+          mkdir -p new-apk
+          find staging/25.12 \( -name "ucode-docopt-*.apk" -o -name "ucode-utest-*.apk" \) -exec cp {} new-apk/ \;
           if [ -n "$APK_FEED_SIGNING_KEY" ]; then
             printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
           fi
           docker run --rm \
             --user $(id -u):$(id -g) \
             $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
-            -v ${{ github.workspace }}/25.12/x86_64:/x86_64 \
-            -v ${{ github.workspace }}/25.12/noarch:/noarch \
+            -v ${{ github.workspace }}/new-apk:/new \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
-              if [ -f /apk.key ]; then
-                for pkg in /x86_64/*.apk; do
+              set -e
+              for pkg in /new/*.apk; do
+                if [ -f /apk.key ]; then
                   /builder/staging_dir/host/bin/apk adbsign \
                     --allow-untrusted --reset-signatures \
-                    --sign-key /apk.key \"\$pkg\" 2>/dev/null
-                done
-              fi
-              for pkg in /x86_64/*.apk; do
-                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
-                if [ \"\$arch\" = noarch ]; then
-                  cp \"\$pkg\" /noarch/
+                    --sign-key /apk.key \"\$pkg\" 2>/dev/null ||
+                    echo \"Warning: could not sign \$pkg\" >&2
                 fi
+                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
+                [ -n \"\$arch\" ] || { echo \"no arch in \$pkg\" >&2; exit 1; }
+                echo \"\$arch\" > \"\$pkg.arch\"
               done
             "
           rm -f /tmp/apk.key
+          for pkg in new-apk/*.apk; do
+            dir=25.12/$(cat "$pkg.arch")
+            mkdir -p "$dir"
+            [ -e "$dir/$(basename "$pkg")" ] || cp "$pkg" "$dir/"
+          done
+          rm -rf new-apk
 
       - name: Regenerate 24.10 index
         run: |
@@ -143,38 +149,42 @@ jobs:
                    sh /newest-only-index.sh opkg < /tmp/Packages.all > Packages &&
                    gzip -9c Packages > Packages.gz"
 
-      - name: Regenerate 25.12 index
-        run: |
-          chmod -R 777 25.12/x86_64 || true
-          docker run --rm \
-            --user $(id -u):$(id -g) \
-            -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
-            -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
-            openwrt/sdk:x86-64-25.12.3 \
-            sh -c "
-              newest=\$(sh /newest-only-index.sh apk /pkgs/*.apk) || exit 1
-              /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest ||
-              echo 'Warning: APKINDEX generation failed'
-            "
-
-      - name: Sign 25.12 index
+      # Every 25.12 arch index, not just x86_64: apk only installs what the
+      # router's own <arch>/APKINDEX.tar.gz lists, so each index lists the
+      # newest packages of its own directory plus the newest of 25.12/noarch/.
+      # luci-sso.yml runs the same loop over the same directories, so whichever
+      # workflow publishes last, no index loses the other's packages.
+      - name: Regenerate and sign 25.12 indexes
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
         run: |
-          git show origin/main:apk.pub > 25.12/feed.pub.pem
-          if [ -n "$APK_FEED_SIGNING_KEY" ]; then
-            chmod -R 777 25.12/x86_64 || true
-            printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
-            docker run --rm \
+          set -eu
+          [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
+          for dir in 25.12/*/ ; do
+            case "$dir" in 25.12/noarch/) continue ;; esac
+            chmod -R 777 "$dir" || true
+            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -v ${{ github.workspace }}/25.12/noarch:/noarch:ro \
+              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
               --user $(id -u):$(id -g) \
-              -v /tmp/apk.key:/apk.key:ro \
-              -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
               openwrt/sdk:x86-64-25.12.3 \
-              /builder/staging_dir/host/bin/apk adbsign \
-                --allow-untrusted --reset-signatures \
-                --sign-key /apk.key /pkgs/APKINDEX.tar.gz
-            rm /tmp/apk.key
-          fi
+              sh -c "set -e
+                     files=
+                     for f in /noarch/*.apk /pkgs/*.apk; do
+                       if [ -f \"\$f\" ]; then files=\"\$files \$f\"; fi
+                     done
+                     newest=\$(sh /newest-only-index.sh apk \$files)
+                     /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest"
+            if [ -f /tmp/apk.key ]; then
+              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                --user $(id -u):$(id -g) \
+                openwrt/sdk:x86-64-25.12.3 \
+                /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures \
+                  --sign-key /apk.key /pkgs/APKINDEX.tar.gz
+            fi
+          done
+          rm -f /tmp/apk.key
+          git show origin/main:apk.pub > 25.12/feed.pub.pem
 
       - name: Sign 24.10 index
         env:
