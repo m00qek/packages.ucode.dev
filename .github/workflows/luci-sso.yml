@@ -106,6 +106,12 @@ jobs:
             echo "$feed_dir/$arch:"; ls -1 "$feed_dir/$arch"
           done
 
+      # Every package file stays on gh-pages so direct-download rollbacks keep
+      # working, but each index lists only the newest version of a package, as
+      # OpenWrt's own feeds do. The filter lives on main, not on gh-pages.
+      - name: Fetch the newest-only index filter
+        run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
+
       - name: Regenerate and sign per-arch indexes
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
@@ -119,10 +125,13 @@ jobs:
             [ -d "$dir" ] || continue
             chmod -R 777 "$dir" || true
             docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
               --user $(id -u):$(id -g) \
               -e MKHASH=/builder/staging_dir/host/bin/mkhash \
               openwrt/sdk:x86-64-24.10.6 \
-              sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
+              sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > /tmp/Packages.all &&
+                     sh /newest-only-index.sh opkg < /tmp/Packages.all > Packages &&
+                     gzip -9c Packages > Packages.gz"
             if [ -f /tmp/opkg.key ]; then
               docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
                 --user $(id -u):$(id -g) \
@@ -139,10 +148,13 @@ jobs:
           # happened to run again (seen with 0.10.0 on 2026-09-29).
           chmod -R 777 24.10 || true
           docker run --rm -v ${{ github.workspace }}/24.10:/pkgs \
+            -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
             --user $(id -u):$(id -g) \
             -e MKHASH=/builder/staging_dir/host/bin/mkhash \
             openwrt/sdk:x86-64-24.10.6 \
-            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
+            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > /tmp/Packages.all &&
+                   sh /newest-only-index.sh opkg < /tmp/Packages.all > Packages &&
+                   gzip -9c Packages > Packages.gz"
           if [ -f /tmp/opkg.key ]; then
             docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/24.10:/pkgs \
               --user $(id -u):$(id -g) \
@@ -161,9 +173,11 @@ jobs:
                 sh -c "for p in /pkgs/*.apk; do /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures --sign-key /apk.key \"\$p\" 2>/dev/null || true; done"
             fi
             docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
               --user $(id -u):$(id -g) \
               openwrt/sdk:x86-64-25.12.3 \
-              sh -c "/builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk"
+              sh -c "newest=\$(sh /newest-only-index.sh apk /pkgs/*.apk) &&
+                     /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest"
             if [ -f /tmp/apk.key ]; then
               docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
                 --user $(id -u):$(id -g) \

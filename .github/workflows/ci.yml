@@ -89,6 +89,12 @@ jobs:
           find staging/24.10 \( -name "ucode-docopt_*.ipk" -o -name "ucode-utest_*.ipk" \) -exec cp -n {} 24.10/ \;
           find staging/25.12 \( -name "ucode-docopt-*.apk" -o -name "ucode-utest-*.apk" \) -exec cp -n {} 25.12/x86_64/ \;
 
+      # Every package file stays on gh-pages so direct-download rollbacks keep
+      # working, but each index lists only the newest version of a package, as
+      # OpenWrt's own feeds do. The filter lives on main, not on gh-pages.
+      - name: Fetch the newest-only index filter
+        run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
+
       - name: Sort and sign 25.12 packages
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
@@ -130,9 +136,12 @@ jobs:
           docker run --rm \
             --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}/24.10:/pkgs \
+            -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
             -e MKHASH=/builder/staging_dir/host/bin/mkhash \
             openwrt/sdk:x86-64-24.10.6 \
-            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
+            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > /tmp/Packages.all &&
+                   sh /newest-only-index.sh opkg < /tmp/Packages.all > Packages &&
+                   gzip -9c Packages > Packages.gz"
 
       - name: Regenerate 25.12 index
         run: |
@@ -140,9 +149,11 @@ jobs:
           docker run --rm \
             --user $(id -u):$(id -g) \
             -v ${{ github.workspace }}/25.12/x86_64:/pkgs \
+            -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
-              /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz /pkgs/*.apk ||
+              newest=\$(sh /newest-only-index.sh apk /pkgs/*.apk) || exit 1
+              /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest ||
               echo 'Warning: APKINDEX generation failed'
             "
 

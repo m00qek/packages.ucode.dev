@@ -62,5 +62,11 @@ Then:
 ## Feed structure
 
 Packages are built for `x86-64` against OpenWrt 24.10.x and 25.12.x and published to
-GitHub Pages. All versions accumulate — installing an older version is possible by
-pinning the version in `opkg install` or `apk add`.
+GitHub Pages. Like OpenWrt's own feeds, each index lists only the newest version of
+each package, so `opkg install` and `apk add` always get the latest release. Older
+package files stay published next to it: to roll back, download the version you need
+from the feed directory and install that file directly, e.g.
+
+```sh
+opkg install https://m00qek.github.io/packages.ucode.dev/24.10/ucode-utest_1.5.0-r1_all.ipk
+```
