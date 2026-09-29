@@ -1,4 +1,22 @@
 Package: luci-sso
+Version: 0.10.0-r1
+Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, rpcd-mod-ucode, luci-sso-crypto, luci-base
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 245760
+Filename: aarch64_cortex-a53/luci-sso_0.10.0-r1_aarch64_cortex-a53.ipk
+Size: 62454
+SHA256sum: 4b5fcea7e55165611794e4f819a8f2671aaec839eaa2f16ab5dfd3ad707053d0
+Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+
+Package: luci-sso
 Version: 0.9.1-r1
 Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, luci-sso-crypto, luci-base
 Source: feeds/base/luci-sso
@@ -15,6 +33,25 @@ Filename: aarch64_cortex-a53/luci-sso_0.9.1-r1_aarch64_cortex-a53.ipk
 Size: 38979
 SHA256sum: f9d6fe294c4b2a5fdc4cca39d7bb91a974d32cdd968220c0eb5a40c3edb9dffa
 Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+
+Package: luci-sso-crypto-mbedtls
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libmbedtls21
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 71680
+Filename: aarch64_cortex-a53/luci-sso-crypto-mbedtls_0.10.0-r1_aarch64_cortex-a53.ipk
+Size: 6750
+SHA256sum: 66d75d24fce87b2f185d3bea29b35f7309cfc76535c277a8c74fc41dc3cabd42
+Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-mbedtls
 Version: 0.9.1-r1
@@ -36,6 +73,25 @@ SHA256sum: 00efbf20f5728163c3aa31a9fc3d19abfa2c3e8dc1f56e45a80f26bf88888b78
 Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-openssl
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libopenssl3
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 71680
+Filename: aarch64_cortex-a53/luci-sso-crypto-openssl_0.10.0-r1_aarch64_cortex-a53.ipk
+Size: 7594
+SHA256sum: 26e7ec4551d1d38bcdd5ff1ce81b77f278ed357a39227b2aebcb86c4163984fe
+Description:  OpenSSL backend for luci-sso
+
+Package: luci-sso-crypto-openssl
 Version: 0.9.1-r1
 Depends: libc, libucode20230711, libopenssl3
 Provides: luci-sso-crypto
@@ -53,6 +109,25 @@ Filename: aarch64_cortex-a53/luci-sso-crypto-openssl_0.9.1-r1_aarch64_cortex-a53
 Size: 7083
 SHA256sum: a4593fe8cacfedee11aedbbe003f532a086be627e2523707e5686c7b486c853f
 Description:  OpenSSL backend for luci-sso
+
+Package: luci-sso-crypto-wolfssl
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libwolfssl5.7.6.e624513f
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 71680
+Filename: aarch64_cortex-a53/luci-sso-crypto-wolfssl_0.10.0-r1_aarch64_cortex-a53.ipk
+Size: 6587
+SHA256sum: 2030c79a011c21d7cf7c07c2a11d340be2869da573bf489ad1354194849141ca
+Description:  WolfSSL backend for luci-sso
 
 Package: luci-sso-crypto-wolfssl
 Version: 0.9.1-r1
@@ -74,6 +149,24 @@ SHA256sum: 20840ea02d9bd35cbf3087e6f14d2f05b5e22b1983f8648241fa061ff8070d1a
 Description:  WolfSSL backend for luci-sso
 
 Package: luci-sso
+Version: 0.10.0-r1
+Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, rpcd-mod-ucode, luci-sso-crypto, luci-base
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 245760
+Filename: aarch64_generic/luci-sso_0.10.0-r1_aarch64_generic.ipk
+Size: 62450
+SHA256sum: 4f12475c9da8b1dc0de63e5b2b8dea9024f49cf8f5d8dd537ccb71395510298a
+Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+
+Package: luci-sso
 Version: 0.9.1-r1
 Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, luci-sso-crypto, luci-base
 Source: feeds/base/luci-sso
@@ -90,6 +183,25 @@ Filename: aarch64_generic/luci-sso_0.9.1-r1_aarch64_generic.ipk
 Size: 38973
 SHA256sum: 043b786715326dac6f27cb6f29c260a08e74d4ee8db588252b7795d4f67f69d8
 Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+
+Package: luci-sso-crypto-mbedtls
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libmbedtls21
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 71680
+Filename: aarch64_generic/luci-sso-crypto-mbedtls_0.10.0-r1_aarch64_generic.ipk
+Size: 6738
+SHA256sum: edfeebb1de8ee9dd0a43c763091f67d6e2200102654d314ca45307848cb56086
+Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-mbedtls
 Version: 0.9.1-r1
@@ -111,6 +223,25 @@ SHA256sum: cd16cf8d2b2ac9d155652eb6e6cc58a0f13c174328018e68b780d4907997edc2
 Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-openssl
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libopenssl3
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 71680
+Filename: aarch64_generic/luci-sso-crypto-openssl_0.10.0-r1_aarch64_generic.ipk
+Size: 7598
+SHA256sum: 1262c23c07f527a4096da16dc7d70f659fde59fc3b9d659a7572cdbab5fd79ad
+Description:  OpenSSL backend for luci-sso
+
+Package: luci-sso-crypto-openssl
 Version: 0.9.1-r1
 Depends: libc, libucode20230711, libopenssl3
 Provides: luci-sso-crypto
@@ -128,6 +259,25 @@ Filename: aarch64_generic/luci-sso-crypto-openssl_0.9.1-r1_aarch64_generic.ipk
 Size: 7090
 SHA256sum: 2edab8b90270dbf4af63fd8d2c91d77a82efa5c98a3b2a739ac7f0434acef109
 Description:  OpenSSL backend for luci-sso
+
+Package: luci-sso-crypto-wolfssl
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libwolfssl5.7.6.e624513f
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 71680
+Filename: aarch64_generic/luci-sso-crypto-wolfssl_0.10.0-r1_aarch64_generic.ipk
+Size: 6588
+SHA256sum: 6c09f0cbacea79f0138eeb0fcab3c2647e61abfedc68d3cce4d6119892eee170
+Description:  WolfSSL backend for luci-sso
 
 Package: luci-sso-crypto-wolfssl
 Version: 0.9.1-r1
@@ -377,6 +527,24 @@ Description:  A modern, non-invasive testing framework for the ucode ecosystem.
  uloop, and uclient, and both sequential and parallel test runners.
 
 Package: luci-sso
+Version: 0.10.0-r1
+Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, rpcd-mod-ucode, luci-sso-crypto, luci-base
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: x86_64
+Installed-Size: 245760
+Filename: x86_64/luci-sso_0.10.0-r1_x86_64.ipk
+Size: 62446
+SHA256sum: 23e6c670b109987585195ef86b23744fceb4f344d3af28dbd37d0bf048129afa
+Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+
+Package: luci-sso
 Version: 0.9.1-r1
 Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, luci-sso-crypto, luci-base
 Source: feeds/base/luci-sso
@@ -393,6 +561,25 @@ Filename: x86_64/luci-sso_0.9.1-r1_x86_64.ipk
 Size: 38970
 SHA256sum: a9c99032f1a566f7726121f00a7fcbbc3092f6c5b4f1be1a2982c66924c0104f
 Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
+
+Package: luci-sso-crypto-mbedtls
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libmbedtls21
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: x86_64
+Installed-Size: 30720
+Filename: x86_64/luci-sso-crypto-mbedtls_0.10.0-r1_x86_64.ipk
+Size: 6103
+SHA256sum: 6109949d26c38f22d09fb8807cacfd18e1797c26969630e95a5e0a1789f7d494
+Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-mbedtls
 Version: 0.9.1-r1
@@ -414,6 +601,25 @@ SHA256sum: 3a3c9dd8e8f31299d22c85320fa3784481ba28ba1b785a4d8da74d97b6be0506
 Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-openssl
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libopenssl3
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: x86_64
+Installed-Size: 30720
+Filename: x86_64/luci-sso-crypto-openssl_0.10.0-r1_x86_64.ipk
+Size: 6866
+SHA256sum: a31e6845ddf64f8efa56664c3d6f03a232d4029c64b5ce4dc4a2ef15511d4ac1
+Description:  OpenSSL backend for luci-sso
+
+Package: luci-sso-crypto-openssl
 Version: 0.9.1-r1
 Depends: libc, libucode20230711, libopenssl3
 Provides: luci-sso-crypto
@@ -431,6 +637,25 @@ Filename: x86_64/luci-sso-crypto-openssl_0.9.1-r1_x86_64.ipk
 Size: 6503
 SHA256sum: d70a819556292a4b156339bf60ce3500d93c7ed214b81ef57d60fc3add9023c8
 Description:  OpenSSL backend for luci-sso
+
+Package: luci-sso-crypto-wolfssl
+Version: 0.10.0-r1
+Depends: libc, libucode20230711, libwolfssl5.7.6.e624513f
+Provides: luci-sso-crypto
+Source: feeds/base/luci-sso
+SourceName: luci-sso
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1773709139
+URL: https://github.com/m00qek/luci-sso
+Maintainer: António Móra <m00qek@gmail.com>
+Architecture: x86_64
+Installed-Size: 30720
+Filename: x86_64/luci-sso-crypto-wolfssl_0.10.0-r1_x86_64.ipk
+Size: 6014
+SHA256sum: aea930b048b1dd0a670c80b2913b59b75557d6737274deeda93b6dccac75a91b
+Description:  WolfSSL backend for luci-sso
 
 Package: luci-sso-crypto-wolfssl
 Version: 0.9.1-r1
