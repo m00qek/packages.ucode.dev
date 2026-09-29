@@ -131,6 +131,25 @@ jobs:
             fi
           done
 
+          # The 24.10 feed URL users add is the feed ROOT: opkg does not append
+          # the architecture to a src/gz URL. The root Packages is a combined
+          # index (ipkg-make-index recurses into the arch directories), so it
+          # must be rebuilt here too. Only ci.yml rebuilt it before, so after a
+          # luci-sso release it kept listing the previous version until ci.yml
+          # happened to run again (seen with 0.10.0 on 2026-09-29).
+          chmod -R 777 24.10 || true
+          docker run --rm -v ${{ github.workspace }}/24.10:/pkgs \
+            --user $(id -u):$(id -g) \
+            -e MKHASH=/builder/staging_dir/host/bin/mkhash \
+            openwrt/sdk:x86-64-24.10.6 \
+            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > Packages && gzip -9c Packages > Packages.gz"
+          if [ -f /tmp/opkg.key ]; then
+            docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/24.10:/pkgs \
+              --user $(id -u):$(id -g) \
+              openwrt/sdk:x86-64-24.10.6 \
+              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
+          fi
+
           for dir in 25.12/*/ ; do
             [ -d "$dir" ] || continue
             case "$dir" in 25.12/noarch/) continue ;; esac
