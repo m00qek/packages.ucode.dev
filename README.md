@@ -7,8 +7,8 @@ and [luci-sso](https://github.com/m00qek/luci-sso).
 
 | Package | Description | OpenWrt 24.10 (opkg) | OpenWrt 25.12 (apk) | Version (current) |
 |---------|-------------|----------------------|---------------------|-------------------|
-| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `x86_64` only (see below) | 1.0.2-r1 |
-| [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `x86_64` only (see below) | 1.5.1-r1 |
+| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 1.0.2-r1 |
+| [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 1.5.1-r1 |
 | [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
@@ -16,10 +16,6 @@ and [luci-sso](https://github.com/m00qek/luci-sso).
 
 `all` means any architecture. To see your router's architecture, run
 `opkg print-architecture` on OpenWrt 24.10 or `apk --print-arch` on OpenWrt 25.12.
-
-On OpenWrt 25.12, `ucode-docopt` and `ucode-utest` are architecture-independent
-(`noarch`), but only the `x86_64` index lists them. `apk add` finds them on an
-`x86_64` router only; on `aarch64_generic` or `aarch64_cortex-a53` it does not.
 
 ## Installation
 
@@ -38,7 +34,7 @@ echo "https://m00qek.github.io/packages.ucode.dev/25.12" \
   >> /etc/apk/repositories.d/customfeeds.list
 
 apk update
-apk add ucode-docopt ucode-utest                 # x86_64 only, see above
+apk add ucode-docopt ucode-utest
 apk add luci-sso luci-sso-crypto-mbedtls
 ```
 
@@ -98,8 +94,8 @@ crypto backends are built separately for `x86_64`, `aarch64_generic` and
 |------|----------|
 | `24.10/` | `ucode-docopt` and `ucode-utest` packages, and the root index that lists every package for every architecture |
 | `24.10/<arch>/` | luci-sso packages for that architecture, with an index of their own |
-| `25.12/<arch>/` | the index apk reads for that architecture, with its packages; `x86_64/` also holds `ucode-docopt` and `ucode-utest` |
-| `25.12/noarch/` | copies of the `ucode-docopt` and `ucode-utest` packages; no index lists them |
+| `25.12/<arch>/` | luci-sso packages for that architecture, and the index apk reads for it, which also lists `ucode-docopt` and `ucode-utest`; `x86_64/` also holds older copies of those two |
+| `25.12/noarch/` | `ucode-docopt` and `ucode-utest` packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
 
 Like OpenWrt's own feeds, each index lists only the newest version of each
 package, so `opkg install` and `apk add` always get the latest release. Older
