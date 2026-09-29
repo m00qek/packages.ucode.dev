@@ -20,8 +20,49 @@ on:
   workflow_dispatch:
 
 jobs:
+  # luci-sso/Makefile is generated, never edited here: luci-sso's
+  # devenv/scripts/gen-feed-makefile.sh derives it from the release tarball
+  # (`make feed-makefile VERSION=x` in luci-sso). This job regenerates it with
+  # the generator from the tag PKG_VERSION names and fails on any difference,
+  # so a hand edit, a stale copy or a wrong PKG_HASH never reaches the build
+  # or the feed. The generator downloads the tarball itself, so a matching
+  # PKG_HASH is proven too.
+  drift:
+    name: Makefile matches luci-sso release
+    runs-on: ubuntu-latest
+    env:
+      LUCI_SSO_RAW: https://raw.githubusercontent.com/m00qek/luci-sso
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Regenerate luci-sso/Makefile and compare
+        run: |
+          set -eu
+          version=$(sed -n 's/^PKG_VERSION:=//p' luci-sso/Makefile)
+          [ -n "$version" ] || { echo "::error file=luci-sso/Makefile::no PKG_VERSION"; exit 1; }
+          gen="$RUNNER_TEMP/gen-feed-makefile.sh"
+          script=devenv/scripts/gen-feed-makefile.sh
+
+          # The generator the release itself shipped. Tags before it existed
+          # (v0.10.0) fall back to luci-sso main's; either way it transforms
+          # the Makefile inside the v$version tarball, not main's.
+          code=$(curl -sSL --retry 3 -o "$gen" -w '%{http_code}' "$LUCI_SSO_RAW/v$version/$script" || true)
+          if [ "$code" = 404 ]; then
+            echo "::warning::luci-sso v$version has no $script; using the one on luci-sso main"
+            code=$(curl -sSL --retry 3 -o "$gen" -w '%{http_code}' "$LUCI_SSO_RAW/main/$script" || true)
+          fi
+          [ "$code" = 200 ] || { echo "::error::could not fetch $script for v$version (HTTP $code)"; exit 1; }
+
+          sh "$gen" -o "$RUNNER_TEMP/Makefile" "$version"
+          if ! diff -u "$RUNNER_TEMP/Makefile" luci-sso/Makefile; then
+            echo "::error file=luci-sso/Makefile::differs from the Makefile generated for luci-sso v$version. Regenerate it in luci-sso with: make feed-makefile VERSION=$version OUT=<this repo>/luci-sso/Makefile"
+            exit 1
+          fi
+          echo "luci-sso/Makefile matches the one generated for v$version"
+
   build:
     name: Build ${{ matrix.arch.pkg }} (${{ matrix.release.sdk_version }})
+    needs: drift
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -72,7 +113,7 @@ jobs:
 
   deploy:
     name: Publish to feed
-    needs: build
+    needs: [drift, build]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:

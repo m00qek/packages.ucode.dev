@@ -67,6 +67,19 @@ luci-sso needs one crypto backend: `luci-sso-crypto-mbedtls`,
 upgrades and choosing a backend, see the
 [luci-sso documentation](https://m00qek.github.io/luci-sso/latest/).
 
+### Updating `luci-sso/Makefile`
+
+`luci-sso/Makefile` is generated from luci-sso's own package Makefile; do not
+edit it here. After tagging a luci-sso release, regenerate it from the luci-sso
+checkout and commit the result:
+
+```sh
+make feed-makefile VERSION=<version> OUT=<this repo>/luci-sso/Makefile
+```
+
+The `luci-sso` workflow regenerates it from the tag its `PKG_VERSION` names and
+fails, before building or publishing anything, if the committed file differs.
+
 ## Using as a build feed
 
 Add to `feeds.conf` in your OpenWrt buildroot:
