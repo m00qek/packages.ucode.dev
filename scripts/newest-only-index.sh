@@ -8,12 +8,21 @@
 # one (luci-sso 0.9.1 next to 0.10.0).
 #
 # Usage:
-#   newest-only-index.sh opkg < Packages.all > Packages
+#   newest-only-index.sh opkg [--shadow SHADOW] < Packages.all > Packages
 #       Filter an ipkg-make-index.sh index. Of the stanzas sharing a
 #       (Package, Architecture) pair, only the one with the highest Version
 #       is kept. The pair, not the name alone, because the 24.10 root index
-#       is combined across the arch directories. Run it before gzip and
-#       usign, so Packages.gz and the signature cover the filtered file.
+#       is combined across the arch directories. An Architecture: all stanza
+#       also replaces the stanzas of the same Package for any architecture
+#       whose Version is not higher: luci-sso 0.10.0 was built per
+#       architecture, later releases are `all`, and the index must not offer
+#       both. Run it before gzip and usign, so Packages.gz and the signature
+#       cover the filtered file.
+#
+#       With --shadow, the stanzas of the index file SHADOW compete too but
+#       are never printed. The per-arch 24.10 indexes pass the root's `all`
+#       stanzas this way, so an arch directory stops listing a package that
+#       the root now serves, in a newer version, for every architecture.
 #
 #   newest-only-index.sh apk FILE.apk...
 #       Print, one per line, the newest FILE of each package name, to pass
@@ -98,7 +107,8 @@ die() {
 }
 
 filter_opkg() {
-	# Paragraph mode: each record is one stanza, each field one line.
+	# Paragraph mode: each record is one stanza, each field one line. The
+	# index on stdin comes first, so on a tie its stanza wins over a shadow.
 	awk "$AWK_VERCMP"'
 	BEGIN { init_ord(); RS = ""; FS = "\n" }
 	{
@@ -109,24 +119,35 @@ filter_opkg() {
 			if ($f ~ /^Architecture: /) arch = substr($f, 15)
 		}
 		if (pkg == "" || ver == "" || arch == "") {
-			printf "stanza %d lacks Package, Version or Architecture\n", NR > "/dev/stderr"
+			printf "%s: stanza %d lacks Package, Version or Architecture\n", FILENAME, FNR > "/dev/stderr"
 			bad = 1; exit 1
 		}
-		stanza[NR] = $0
+		n++
+		stanza[n] = $0
+		shadowed[n] = shadow
+		name[n] = pkg; arch_of[n] = arch
 		key = pkg SUBSEP arch
 		if (!(key in best) || vercmp(ver, bestver[key]) > 0) {
-			best[key] = NR
+			best[key] = n
 			bestver[key] = ver
 		}
 	}
 	END {
 		if (bad) exit 1
-		for (n = 1; n <= NR; n++) keep[n] = 0
+		for (i = 1; i <= n; i++) keep[i] = 0
 		for (key in best) keep[best[key]] = 1
+		# An `all` stanza serves every architecture: drop the arch-specific
+		# stanzas of the same package it is at least as new as.
+		for (i = 1; i <= n; i++) {
+			if (!keep[i] || arch_of[i] == "all") continue
+			all_key = name[i] SUBSEP "all"
+			if ((all_key in best) && vercmp(bestver[all_key], bestver[name[i] SUBSEP arch_of[i]]) >= 0)
+				keep[i] = 0
+		}
 		# Input order, and the same stanza layout ipkg-make-index writes.
-		for (n = 1; n <= NR; n++)
-			if (keep[n]) printf "%s\n\n", stanza[n]
-	}'
+		for (i = 1; i <= n; i++)
+			if (keep[i] && !shadowed[i]) printf "%s\n\n", stanza[i]
+	}' shadow=0 - ${1:+shadow=1 "$1"}
 }
 
 newest_apk() {
@@ -167,11 +188,17 @@ newest_apk() {
 	}'
 }
 
-[ "$#" -ge 1 ] || die "usage: $0 opkg < Packages | $0 apk FILE.apk..."
+[ "$#" -ge 1 ] || die "usage: $0 opkg [--shadow SHADOW] < Packages | $0 apk FILE.apk..."
 mode=$1; shift
 case "$mode" in
-	opkg) [ "$#" -eq 0 ] || die "opkg: reads the index on stdin, takes no arguments"
-	      filter_opkg ;;
+	opkg) shadow=
+	      if [ "$#" -eq 2 ] && [ "$1" = --shadow ]; then
+	      	[ -f "$2" ] || die "opkg: no such shadow index: $2"
+	      	shadow=$2
+	      elif [ "$#" -ne 0 ]; then
+	      	die "opkg: reads the index on stdin; the only option is --shadow SHADOW"
+	      fi
+	      filter_opkg "$shadow" ;;
 	apk)  newest_apk "$@" ;;
 	*)    die "unknown mode: $mode (expected opkg or apk)" ;;
 esac

@@ -136,6 +136,12 @@ jobs:
           done
           rm -rf new-apk
 
+      # The root index combines every directory under 24.10/, luci-sso's
+      # per-arch ones included; luci-sso.yml rebuilds it the same way, with
+      # the same filter, so whichever workflow publishes last, it lists the
+      # same packages. The filter lists each package once per architecture,
+      # and a newer `all` package (luci-sso after 0.10.0) in place of all of
+      # them.
       - name: Regenerate 24.10 index
         run: |
           chmod -R 777 24.10 || true

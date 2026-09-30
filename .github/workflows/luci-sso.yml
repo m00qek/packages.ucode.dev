@@ -134,22 +134,110 @@ jobs:
           path: staging
           pattern: luci-sso-*
 
-      - name: Sort packages into per-arch directories
+      # luci-sso itself is PKGARCH:=all after 0.10.0: one package for every
+      # architecture. Only the luci-sso-crypto-* packages carry the compiled
+      # native.so and are built per architecture. Every build job produces the
+      # `all` package too, but two builds of one version are not
+      # byte-identical, so it is taken from the x86_64 build only; the other
+      # builds must have produced the same file names, or the job fails.
+      #
+      #   24.10  `all`  -> 24.10/, the feed root, next to ucode-utest
+      #          arch   -> 24.10/<arch>/
+      #   25.12  noarch -> 25.12/noarch/, which every arch index lists
+      #          arch   -> 25.12/<arch>/
+      #
+      # A 25.12 package's arch is the one apk records in it, read after it is
+      # signed in a scratch directory. A version already published is never
+      # replaced, so 0.10.0 and older stay per-arch, as they were published.
+      - name: Sign and sort the packages into the feed
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
         run: |
           set -eu
-          # luci-sso ships a compiled native.so, so unlike ucode-utest/ucode-docopt
-          # (PKGARCH:=all) every package is architecture-specific and needs its own
-          # directory and index. On 25.12 each arch index also lists the noarch
-          # packages that ci.yml publishes under 25.12/noarch/.
+          ref=x86_64
+          fail() { echo "::error::$*"; exit 1; }
+
+          rm -rf new
           for d in staging/luci-sso-*; do
             [ -d "$d" ] || continue
             name=$(basename "$d")                       # luci-sso-<arch>-<feed_dir>
             feed_dir=${name##*-}                        # 24.10 | 25.12
-            arch=${name#luci-sso-}; arch=${arch%-*}     # x86-64 | aarch64_*
-            mkdir -p "$feed_dir/$arch"
-            cp -n "$d"/* "$feed_dir/$arch/" 2>/dev/null || true
-            echo "$feed_dir/$arch:"; ls -1 "$feed_dir/$arch"
+            arch=${name#luci-sso-}; arch=${arch%-*}     # x86_64 | aarch64_*
+            mkdir -p "new/$feed_dir/$arch"
+            cp "$d"/* "new/$feed_dir/$arch/"
           done
+          [ -d "new/24.10/$ref" ] && [ -d "new/25.12/$ref" ] \
+            || fail "no $ref build: the architecture-independent packages are taken from it"
+
+          # 25.12: sign each package and record its arch next to it.
+          [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
+          chmod -R 777 new/25.12
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
+            -v ${{ github.workspace }}/new/25.12:/new \
+            openwrt/sdk:x86-64-25.12.3 \
+            sh -c "
+              set -e
+              for pkg in /new/*/*.apk; do
+                if [ -f /apk.key ]; then
+                  /builder/staging_dir/host/bin/apk adbsign \
+                    --allow-untrusted --reset-signatures \
+                    --sign-key /apk.key \"\$pkg\"
+                fi
+                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
+                [ -n \"\$arch\" ] || { echo \"no arch in \$pkg\" >&2; exit 1; }
+                echo \"\$arch\" > \"\$pkg.arch\"
+              done
+            "
+          rm -f /tmp/apk.key
+
+          # publish <package> <dest dir>: never replaces a published file.
+          publish() {
+            mkdir -p "$2"
+            if [ -e "$2/$(basename "$1")" ]; then
+              echo "kept   $2/$(basename "$1") (already published)"
+            else
+              cp "$1" "$2/" && echo "filed  $2/$(basename "$1")"
+            fi
+          }
+          all_24() { ls "new/24.10/$1" | grep '_all\.ipk$' || true; }
+          all_25() {
+            for a in "new/25.12/$1"/*.apk.arch; do
+              if [ -f "$a" ] && [ "$(cat "$a")" = noarch ]; then basename "${a%.arch}"; fi
+            done
+          }
+
+          for dir in new/24.10/*/; do
+            arch=$(basename "$dir")
+            [ "$(all_24 "$arch")" = "$(all_24 "$ref")" ] \
+              || fail "24.10: the $arch build has other \`all\` packages than the $ref build"
+            for pkg in "$dir"*.ipk; do
+              base=$(basename "$pkg")
+              case "$base" in
+                *_all.ipk)     if [ "$arch" = "$ref" ]; then publish "$pkg" 24.10; fi ;;
+                *_"$arch".ipk) publish "$pkg" "24.10/$arch" ;;
+                *)             fail "24.10: $base, from the $arch build, is neither $arch nor all" ;;
+              esac
+            done
+          done
+
+          for dir in new/25.12/*/; do
+            arch=$(basename "$dir")
+            [ "$(all_25 "$arch")" = "$(all_25 "$ref")" ] \
+              || fail "25.12: the $arch build has other noarch packages than the $ref build"
+            for pkg in "$dir"*.apk; do
+              pkg_arch=$(cat "$pkg.arch")
+              if [ "$pkg_arch" = noarch ]; then
+                if [ "$arch" = "$ref" ]; then publish "$pkg" 25.12/noarch; fi
+              elif [ "$pkg_arch" = "$arch" ]; then
+                publish "$pkg" "25.12/$arch"
+              else
+                fail "25.12: $(basename "$pkg"), from the $arch build, is '$pkg_arch'"
+              fi
+            done
+          done
+          rm -rf new
 
       # Every package file stays on gh-pages so direct-download rollbacks keep
       # working, but each index lists only the newest version of a package, as
@@ -157,7 +245,7 @@ jobs:
       - name: Fetch the newest-only index filter
         run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
 
-      - name: Regenerate and sign per-arch indexes
+      - name: Regenerate and sign the indexes
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
           OPKG_FEED_SIGNING_KEY: ${{ secrets.OPKG_FEED_SIGNING_KEY }}
@@ -166,31 +254,12 @@ jobs:
           [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
           [ -n "${OPKG_FEED_SIGNING_KEY:-}" ] && printf '%s' "$OPKG_FEED_SIGNING_KEY" > /tmp/opkg.key || true
 
-          for dir in 24.10/*/ ; do
-            [ -d "$dir" ] || continue
-            chmod -R 777 "$dir" || true
-            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
-              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
-              --user $(id -u):$(id -g) \
-              -e MKHASH=/builder/staging_dir/host/bin/mkhash \
-              openwrt/sdk:x86-64-24.10.6 \
-              sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > /tmp/Packages.all &&
-                     sh /newest-only-index.sh opkg < /tmp/Packages.all > Packages &&
-                     gzip -9c Packages > Packages.gz"
-            if [ -f /tmp/opkg.key ]; then
-              docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
-                --user $(id -u):$(id -g) \
-                openwrt/sdk:x86-64-24.10.6 \
-                /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
-            fi
-          done
-
           # The 24.10 feed URL users add is the feed ROOT: opkg does not append
           # the architecture to a src/gz URL. The root Packages is a combined
-          # index (ipkg-make-index recurses into the arch directories), so it
-          # must be rebuilt here too. Only ci.yml rebuilt it before, so after a
-          # luci-sso release it kept listing the previous version until ci.yml
-          # happened to run again (seen with 0.10.0 on 2026-09-29).
+          # index (ipkg-make-index recurses into the arch directories), rebuilt
+          # here as well as by ci.yml, with the same filter: it lists luci-sso
+          # once, as the newest `all` package, and each crypto backend once
+          # per architecture.
           chmod -R 777 24.10 || true
           docker run --rm -v ${{ github.workspace }}/24.10:/pkgs \
             -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
@@ -207,23 +276,43 @@ jobs:
               /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
           fi
 
+          # The per-arch 24.10 indexes list only their own directory. The root
+          # index takes part as a shadow (never printed), so an arch index
+          # drops a package the root serves, newer, as `all`: luci-sso after
+          # 0.10.0 is at the root, and 24.10/<arch>/Packages lists only the
+          # crypto backends.
+          for dir in 24.10/*/ ; do
+            [ -d "$dir" ] || continue
+            chmod -R 777 "$dir" || true
+            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -v ${{ github.workspace }}/24.10/Packages:/root-Packages:ro \
+              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
+              --user $(id -u):$(id -g) \
+              -e MKHASH=/builder/staging_dir/host/bin/mkhash \
+              openwrt/sdk:x86-64-24.10.6 \
+              sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > /tmp/Packages.all &&
+                     sh /newest-only-index.sh opkg --shadow /root-Packages < /tmp/Packages.all > Packages &&
+                     gzip -9c Packages > Packages.gz"
+            if [ -f /tmp/opkg.key ]; then
+              docker run --rm -v /tmp/opkg.key:/opkg.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                --user $(id -u):$(id -g) \
+                openwrt/sdk:x86-64-24.10.6 \
+                /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
+            fi
+          done
+
           # apk only installs what the router's own <arch>/APKINDEX.tar.gz
           # lists, so each index also lists the newest noarch packages
-          # (ucode-utest, ucode-docopt), which ci.yml publishes under
-          # 25.12/noarch/; apk downloads them from there. ci.yml runs the same
-          # loop over the same directories, so whichever workflow publishes
-          # last, no index loses the other's packages.
+          # (luci-sso, ucode-utest, ucode-docopt, wgpathd), published under
+          # 25.12/noarch/; apk downloads them from there. ci.yml and
+          # wgpathd.yml run the same loop over the same directories, so
+          # whichever workflow publishes last, no index loses the others'
+          # packages. The packages were signed when they were filed.
           mkdir -p 25.12/noarch
           for dir in 25.12/*/ ; do
             [ -d "$dir" ] || continue
             case "$dir" in 25.12/noarch/) continue ;; esac
             chmod -R 777 "$dir" || true
-            if [ -f /tmp/apk.key ]; then
-              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
-                --user $(id -u):$(id -g) \
-                openwrt/sdk:x86-64-25.12.3 \
-                sh -c "for p in /pkgs/*.apk; do /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures --sign-key /apk.key \"\$p\" 2>/dev/null || true; done"
-            fi
             docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
               -v ${{ github.workspace }}/25.12/noarch:/noarch:ro \
               -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
