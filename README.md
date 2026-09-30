@@ -1,7 +1,7 @@
 # packages.ucode.dev
 
 Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/ucode),
-and [luci-sso](https://github.com/m00qek/luci-sso).
+[luci-sso](https://github.com/m00qek/luci-sso) and [wgpathd](https://github.com/m00qek/wgpathd).
 
 ## Packages
 
@@ -13,6 +13,8 @@ and [luci-sso](https://github.com/m00qek/luci-sso).
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
+| [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.0-r8 |
+| luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.0-r8 |
 
 `all` means any architecture. To see your router's architecture, run
 `opkg print-architecture` on OpenWrt 24.10 or `apk --print-arch` on OpenWrt 25.12.
@@ -36,6 +38,7 @@ echo "https://m00qek.github.io/packages.ucode.dev/25.12" \
 apk update
 apk add ucode-docopt ucode-utest
 apk add luci-sso luci-sso-crypto-mbedtls
+apk add wgpathd luci-app-wgpathd
 ```
 
 apk reads the index at `25.12/<arch>/APKINDEX.tar.gz`, where `<arch>` is what
@@ -80,6 +83,25 @@ make feed-makefile VERSION=<version> OUT=<this repo>/luci-sso/Makefile
 The `luci-sso` workflow regenerates it from the tag its `PKG_VERSION` names and
 fails, before building or publishing anything, if the committed file differs.
 
+## wgpathd
+
+wgpathd and luci-app-wgpathd are published for OpenWrt 25.12 only, the release
+they are tested on. For setting them up, see the
+[wgpathd documentation](https://m00qek.github.io/wgpathd/latest/).
+
+### Updating `wgpathd/Makefile`
+
+`wgpathd/Makefile` is generated from wgpathd's own package Makefile, the same
+way as luci-sso's; do not edit it here. After tagging a wgpathd release,
+regenerate it from the wgpathd checkout and commit the result:
+
+```sh
+make feed-makefile VERSION=<version> OUT=<this repo>/wgpathd/Makefile
+```
+
+The `wgpathd` workflow regenerates it from the tag its `PKG_VERSION` names and
+fails, before building or publishing anything, if the committed file differs.
+
 ## Using as a build feed
 
 Add to `feeds.conf` in your OpenWrt buildroot:
@@ -99,7 +121,8 @@ Then:
 
 Packages are built with the OpenWrt 24.10.x and 25.12.x SDKs and published to
 GitHub Pages. `ucode-docopt` and `ucode-utest` are architecture-independent and are
-built once, with the `x86-64` SDK. luci-sso contains a C extension, so it and its
+built once, with the `x86-64` SDK; so are `wgpathd` and `luci-app-wgpathd`, with
+the 25.12 SDK only. luci-sso contains a C extension, so it and its
 crypto backends are built separately for `x86_64`, `aarch64_generic` and
 `aarch64_cortex-a53`.
 
@@ -107,8 +130,8 @@ crypto backends are built separately for `x86_64`, `aarch64_generic` and
 |------|----------|
 | `24.10/` | `ucode-docopt` and `ucode-utest` packages, and the root index that lists every package for every architecture |
 | `24.10/<arch>/` | luci-sso packages for that architecture, with an index of their own |
-| `25.12/<arch>/` | luci-sso packages for that architecture, and the index apk reads for it, which also lists `ucode-docopt` and `ucode-utest`; `x86_64/` also holds older copies of those two |
-| `25.12/noarch/` | `ucode-docopt` and `ucode-utest` packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
+| `25.12/<arch>/` | luci-sso packages for that architecture, and the index apk reads for it, which also lists the packages of `25.12/noarch/`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
+| `25.12/noarch/` | `ucode-docopt`, `ucode-utest`, `wgpathd` and `luci-app-wgpathd` packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
 
 Like OpenWrt's own feeds, each index lists only the newest version of each
 package, so `opkg install` and `apk add` always get the latest release. Older
