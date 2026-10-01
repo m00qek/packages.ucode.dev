@@ -1,0 +1,140 @@
+name: luci-sso dependencies
+
+# OpenWrt names some libraries after their ABI, e.g. libwolfssl5.9.1.e624513f,
+# and every 24.10.x or 25.12.x router installs from one feed per branch. When
+# the branch updates such a library, that feed serves it under the new name
+# only, and a luci-sso package built against the old name can no longer be
+# installed. Every day this compares the dependencies of the luci-sso packages
+# the feed lists, per series and architecture, with OpenWrt's live base feed
+# (scripts/luci-sso-deps.sh check). On a mismatch it raises
+# luci-sso/feed-release by one, commits that to main and starts luci-sso.yml,
+# which rebuilds against the branch and publishes the packages whose
+# dependencies changed.
+#
+# It never loops. The commit that raises feed-release names each mismatch it
+# rebuilds for in a Rebuild-For: line. If a mismatch the last change of
+# feed-release named is still there, the rebuild did not fix it, and the job
+# fails instead of raising feed-release again. A commit to feed-release
+# without those lines, e.g. a reset to 1 for a new luci-sso version, re-arms it.
+#
+# It does not join the feed-gh-pages group: it never writes gh-pages, and a
+# job waiting in that group would cancel a deploy already waiting there. It
+# instead skips a day while a luci-sso.yml run is in progress, whose deploy
+# is in that group.
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only report; do not raise feed-release or rebuild
+        type: boolean
+        default: false
+
+concurrency:
+  group: luci-sso-deps
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Published luci-sso matches OpenWrt's feeds
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # commit luci-sso/feed-release to main
+      actions: write    # start luci-sso.yml
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # A luci-sso run that is still building or publishing would make the
+      # feed look out of date, or a rebuild look like it failed.
+      - name: Skip while luci-sso is running
+        id: busy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          url=$(gh run list --workflow luci-sso.yml --limit 20 --json status,url \
+            --jq '[.[] | select(.status != "completed")][0].url // ""')
+          if [ -n "$url" ]; then
+            echo "::notice::luci-sso is building or publishing ($url); checking again tomorrow"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Compare with OpenWrt's live feeds
+        id: check
+        if: steps.busy.outputs.url == ''
+        run: |
+          set -eu
+          git fetch --no-tags origin gh-pages
+          git worktree add --detach "$RUNNER_TEMP/feed" FETCH_HEAD
+          # apk-tools 3 reads the 25.12 indexes; the SDK has it.
+          rc=0
+          docker run --rm \
+            -v "$RUNNER_TEMP/feed":/feed:ro \
+            -v "$PWD/scripts/luci-sso-deps.sh":/luci-sso-deps.sh:ro \
+            openwrt/sdk:x86-64-25.12.3 \
+            sh /luci-sso-deps.sh check /feed > "$RUNNER_TEMP/report" || rc=$?
+          cat "$RUNNER_TEMP/report"
+          [ "$rc" -le 1 ] || { echo "::error::luci-sso-deps.sh check failed"; exit 1; }
+          { grep "^waiting" "$RUNNER_TEMP/report" || true; } | while read -r _ series arch pkg dep live; do
+            echo "::warning::$series/$arch $pkg depends on $dep, newer than the $live OpenWrt serves: waiting for OpenWrt to publish it"
+          done
+          grep '^mismatch' "$RUNNER_TEMP/report" > "$RUNNER_TEMP/mismatches" || true
+          if [ -s "$RUNNER_TEMP/mismatches" ]; then
+            echo "mismatch=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The luci-sso packages the feed lists match OpenWrt's live feeds"
+          fi
+
+      - name: Raise luci-sso/feed-release and rebuild
+        if: steps.check.outputs.mismatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run == true || github.ref != 'refs/heads/main' }}
+        run: |
+          set -eu
+          # Rebuild-For: <series> <arch> <package> <live library>
+          awk '{ print "Rebuild-For: " $2, $3, $4, $6 }' "$RUNNER_TEMP/mismatches" > "$RUNNER_TEMP/trailers"
+          while read -r _ series arch pkg dep live; do
+            echo "::warning::$series/$arch $pkg depends on $dep; OpenWrt's feed serves $live"
+          done < "$RUNNER_TEMP/mismatches"
+
+          last=$(git log -1 --format=%H -- luci-sso/feed-release)
+          if git log -1 --format=%B "$last" | grep -Fx -f "$RUNNER_TEMP/trailers" > "$RUNNER_TEMP/repeated"; then
+            echo "::error::$last raised luci-sso/feed-release to $(cat luci-sso/feed-release) for these, and they are still there:"
+            cat "$RUNNER_TEMP/repeated"
+            echo "The rebuild did not fix them, or did not run. Its luci-sso runs:"
+            gh run list --workflow luci-sso.yml --commit "$last" --json conclusion,url \
+              --jq '.[] | "  \(.conclusion)  \(.url)"' || true
+            echo "Not raising feed-release again: find out why first, then commit a fix or a raise of your own."
+            exit 1
+          fi
+
+          release=$(( $(cat luci-sso/feed-release) + 1 ))
+          libs=$(awk '{ print $6 }' "$RUNNER_TEMP/mismatches" | sort -u | paste -sd ' ' -)
+          {
+            echo "chore(luci-sso): raise the feed release to $release for $libs"
+            echo
+            echo "OpenWrt's live feeds renamed libraries the published luci-sso"
+            echo "packages depend on. Rebuild them against the branch feeds and"
+            echo "publish the packages whose dependencies changed."
+            echo
+            cat "$RUNNER_TEMP/trailers"
+          } > "$RUNNER_TEMP/message"
+          echo "$release" > luci-sso/feed-release
+          cat "$RUNNER_TEMP/message"
+
+          if [ "$DRY_RUN" = true ]; then
+            echo "::notice::dry run: not committing or rebuilding"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -q -F "$RUNNER_TEMP/message" luci-sso/feed-release
+          git push origin HEAD:main
+          # A push with the workflow token starts no workflow; a dispatch does.
+          gh workflow run luci-sso.yml --ref main
+          echo "::notice::luci-sso/feed-release is $release; started luci-sso.yml"

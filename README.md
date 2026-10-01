@@ -13,7 +13,7 @@ and [owrtfetch](https://github.com/m00qek/owrtfetch).
 | [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
-| luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
+| luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r2 |
 | [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.0-r8 |
 | luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.0-r8 |
 | [owrtfetch](https://github.com/m00qek/owrtfetch) | A neofetch-like summary for OpenWrt routers, written in ucode. | — | `noarch` | 0.1.0-r1 |
@@ -77,14 +77,84 @@ upgrades and choosing a backend, see the
 
 `luci-sso/Makefile` is generated from luci-sso's own package Makefile; do not
 edit it here. After tagging a luci-sso release, regenerate it from the luci-sso
-checkout and commit the result:
+checkout, set `luci-sso/feed-release` back to `1`, and commit both together:
 
 ```sh
 make feed-makefile VERSION=<version> OUT=<this repo>/luci-sso/Makefile
+echo 1 > <this repo>/luci-sso/feed-release
 ```
 
-The `luci-sso` workflow regenerates it from the tag its `PKG_VERSION` names and
-fails, before building or publishing anything, if the committed file differs.
+The `luci-sso` workflow regenerates the Makefile from the tag its `PKG_VERSION`
+names and fails, before building or publishing anything, if the committed file
+differs. It also fails if `luci-sso/feed-release` is lower than the Makefile's
+`PKG_RELEASE`; use that number instead of `1` if the Makefile's is higher.
+
+### The feed release
+
+The `-rN` in `0.10.0-r2` is the package release. The feed builds luci-sso with
+the one in `luci-sso/feed-release`, passed to the SDK as `PKG_RELEASE`, so the
+generated Makefile stays as generated. It is how the feed rebuilds a luci-sso
+version that OpenWrt has broken:
+
+OpenWrt names some libraries after their ABI, e.g. `libwolfssl5.9.1.e624513f`.
+Every OpenWrt 24.10.x router installs from one OpenWrt feed for the whole
+`openwrt-24.10` branch, and 25.12.x routers from one for `openwrt-25.12`. When
+the branch updates such a library, that feed serves it under the new name
+only, and a `luci-sso-crypto-wolfssl` built against the old name can no longer
+be installed. So:
+
+- The `luci-sso` workflow builds against OpenWrt's branches, `openwrt-24.10` and
+  `openwrt-25.12`, not the release tag the SDK image pins, so the packages
+  depend on the libraries routers are offered.
+- Raising `luci-sso/feed-release` rebuilds the current luci-sso version. Of
+  that rebuild, the workflow publishes only the packages whose dependencies
+  differ from the newest published release of that version: a renamed
+  `libwolfssl` republishes `luci-sso-crypto-wolfssl` alone, and only for the
+  series and architectures it was renamed in. Routers with it installed see an
+  upgrade; routers with another backend see nothing. So the releases of the
+  luci-sso packages may differ, e.g. `luci-sso` 0.10.0-r1 with
+  `luci-sso-crypto-wolfssl` 0.10.0-r2.
+
+`luci-sso/feed-release` is raised by the `luci-sso dependencies` workflow,
+described next, or by hand.
+
+### The daily dependency check
+
+The `luci-sso dependencies` workflow (`.github/workflows/luci-sso-deps.yml`)
+runs every day, and on demand from the Actions tab. For each OpenWrt series
+and architecture the feed publishes, it takes the luci-sso packages the feed's
+index lists and compares each dependency on an ABI-named library, such as
+`libwolfssl5.9.1.e624513f`, `libucode20230711` or `libmbedtls21`, with OpenWrt's
+live base feed for that branch
+(`https://downloads.openwrt.org/releases/packages-<series>/<arch>/base/`):
+
+- **In sync**: nothing to do.
+- **Mismatch**: the live feed serves another version of the library. The
+  workflow raises `luci-sso/feed-release` by one, commits that to `main` with
+  a `Rebuild-For: <series> <arch> <package> <live library>` line per mismatch,
+  and starts the `luci-sso` workflow, which rebuilds and publishes the
+  packages whose dependencies changed.
+- **Waiting**: a package depends on a newer library than the live feed serves
+  yet: it was built from the branch before OpenWrt's buildbots published that
+  library. A rebuild cannot help; the workflow warns and waits.
+
+It never raises the release twice for the same mismatch. If a mismatch that the
+last change of `luci-sso/feed-release` named in a `Rebuild-For:` line is still
+there, the rebuild did not fix it, or failed, and the workflow fails, listing
+the `luci-sso` runs of that commit, instead of raising the release again. Find
+out why, then commit a fix or a raise of your own; a commit to
+`luci-sso/feed-release` without `Rebuild-For:` lines re-arms it. When raising
+it by hand to fix a reported mismatch, copy those lines into the commit
+message, so the check stops there too if the rebuild does not fix it. The
+workflow skips a day while a `luci-sso` run is in progress.
+
+To run the check by hand against a checkout of `gh-pages`:
+
+```sh
+docker run --rm -v <gh-pages checkout>:/feed:ro \
+  -v "$PWD/scripts/luci-sso-deps.sh":/luci-sso-deps.sh:ro \
+  openwrt/sdk:x86-64-25.12.3 sh /luci-sso-deps.sh check /feed
+```
 
 ## wgpathd
 
