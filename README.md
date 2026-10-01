@@ -115,7 +115,46 @@ be installed. So:
   luci-sso packages may differ, e.g. `luci-sso` 0.10.0-r1 with
   `luci-sso-crypto-wolfssl` 0.10.0-r2.
 
-Raise `luci-sso/feed-release` by one, in a commit of its own, to rebuild.
+`luci-sso/feed-release` is raised by the `luci-sso dependencies` workflow,
+described next, or by hand.
+
+### The daily dependency check
+
+The `luci-sso dependencies` workflow (`.github/workflows/luci-sso-deps.yml`)
+runs every day, and on demand from the Actions tab. For each OpenWrt series
+and architecture the feed publishes, it takes the luci-sso packages the feed's
+index lists and compares each dependency on an ABI-named library, such as
+`libwolfssl5.9.1.e624513f`, `libucode20230711` or `libmbedtls21`, with OpenWrt's
+live base feed for that branch
+(`https://downloads.openwrt.org/releases/packages-<series>/<arch>/base/`):
+
+- **In sync**: nothing to do.
+- **Mismatch**: the live feed serves another version of the library. The
+  workflow raises `luci-sso/feed-release` by one, commits that to `main` with
+  a `Rebuild-For: <series> <arch> <package> <live library>` line per mismatch,
+  and starts the `luci-sso` workflow, which rebuilds and publishes the
+  packages whose dependencies changed.
+- **Waiting**: a package depends on a newer library than the live feed serves
+  yet: it was built from the branch before OpenWrt's buildbots published that
+  library. A rebuild cannot help; the workflow warns and waits.
+
+It never raises the release twice for the same mismatch. If a mismatch that the
+last change of `luci-sso/feed-release` named in a `Rebuild-For:` line is still
+there, the rebuild did not fix it, or failed, and the workflow fails, listing
+the `luci-sso` runs of that commit, instead of raising the release again. Find
+out why, then commit a fix or a raise of your own; a commit to
+`luci-sso/feed-release` without `Rebuild-For:` lines re-arms it. When raising
+it by hand to fix a reported mismatch, copy those lines into the commit
+message, so the check stops there too if the rebuild does not fix it. The
+workflow skips a day while a `luci-sso` run is in progress.
+
+To run the check by hand against a checkout of `gh-pages`:
+
+```sh
+docker run --rm -v <gh-pages checkout>:/feed:ro \
+  -v "$PWD/scripts/luci-sso-deps.sh":/luci-sso-deps.sh:ro \
+  openwrt/sdk:x86-64-25.12.3 sh /luci-sso-deps.sh check /feed
+```
 
 ## wgpathd
 
