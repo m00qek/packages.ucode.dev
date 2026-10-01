@@ -13,7 +13,7 @@ and [owrtfetch](https://github.com/m00qek/owrtfetch).
 | [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
-| luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
+| luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r2 |
 | [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.0-r8 |
 | luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.0-r8 |
 | [owrtfetch](https://github.com/m00qek/owrtfetch) | A neofetch-like summary for OpenWrt routers, written in ucode. | — | `noarch` | 0.1.0-r1 |
