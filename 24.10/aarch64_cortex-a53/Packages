@@ -55,8 +55,8 @@ SHA256sum: 26e7ec4551d1d38bcdd5ff1ce81b77f278ed357a39227b2aebcb86c4163984fe
 Description:  OpenSSL backend for luci-sso
 
 Package: luci-sso-crypto-wolfssl
-Version: 0.10.0-r1
-Depends: libc, libucode20230711, libwolfssl5.7.6.e624513f
+Version: 0.10.0-r2
+Depends: libc, libucode20230711, libwolfssl5.9.1.e624513f
 Provides: luci-sso-crypto
 Source: feeds/base/luci-sso
 SourceName: luci-sso
@@ -68,8 +68,8 @@ URL: https://github.com/m00qek/luci-sso
 Maintainer: António Móra <m00qek@gmail.com>
 Architecture: aarch64_cortex-a53
 Installed-Size: 71680
-Filename: luci-sso-crypto-wolfssl_0.10.0-r1_aarch64_cortex-a53.ipk
-Size: 6587
-SHA256sum: 2030c79a011c21d7cf7c07c2a11d340be2869da573bf489ad1354194849141ca
+Filename: luci-sso-crypto-wolfssl_0.10.0-r2_aarch64_cortex-a53.ipk
+Size: 6591
+SHA256sum: 8467c7d866a78bc75bb4288eb77fa576f8fd459e404fc2c8864dce1fa0798ea6
 Description:  WolfSSL backend for luci-sso
 
