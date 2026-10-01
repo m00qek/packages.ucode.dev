@@ -30,6 +30,8 @@ jobs:
   drift:
     name: Makefile matches luci-sso release
     runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.release.outputs.release }}
     env:
       LUCI_SSO_RAW: https://raw.githubusercontent.com/m00qek/luci-sso
     steps:
@@ -60,6 +62,30 @@ jobs:
           fi
           echo "luci-sso/Makefile matches the one generated for v$version"
 
+      # The feed's own release number for the luci-sso packages, passed to the
+      # build as PKG_RELEASE, so the generated Makefile stays as generated. It
+      # is raised, by hand or by luci-sso-deps.yml, to rebuild a luci-sso
+      # version against a library OpenWrt has renamed since, e.g.
+      # libwolfssl5.9.1.* -> libwolfssl5.9.2.*. It may not be lower than the
+      # Makefile's own PKG_RELEASE, which it would otherwise hide.
+      - name: Read luci-sso/feed-release
+        id: release
+        run: |
+          set -eu
+          release=$(cat luci-sso/feed-release)
+          pkg_release=$(sed -n 's/^PKG_RELEASE:=//p' luci-sso/Makefile)
+          case "$release" in
+            ''|0*|*[!0-9]*)
+              echo "::error file=luci-sso/feed-release::'$release' is not a release number: 1, 2, ..."
+              exit 1 ;;
+          esac
+          if [ "$release" -lt "$pkg_release" ]; then
+            echo "::error file=luci-sso/feed-release::$release is lower than PKG_RELEASE:=$pkg_release in luci-sso/Makefile"
+            exit 1
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "luci-sso packages are built as release r$release"
+
   build:
     name: Build ${{ matrix.arch.pkg }} (${{ matrix.release.sdk_version }})
     needs: drift
@@ -81,6 +107,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # The SDK image pins its feeds to the release tag (base at v24.10.6),
+      # but routers on any 24.10.x install from OpenWrt's one feed for the
+      # whole branch, rebuilt from openwrt-24.10. A library whose package name
+      # carries its version, like libwolfssl5.9.1.e624513f, is renamed there
+      # when the branch updates it, and a backend linked against the tag's
+      # library can no longer be installed. So every feed is switched to the
+      # branch, as luci-sso's devenv does, and the packages depend on the
+      # libraries the live feed serves. luci-sso-deps.yml checks that daily.
+      #
+      # PKG_RELEASE on the command line overrides the Makefile's own, for
+      # every package this make builds; only the luci-sso ones are kept.
       - name: Build packages
         run: |
           mkdir -p bin
@@ -90,13 +127,18 @@ jobs:
             -v ${{ github.workspace }}/bin:/builder/bin \
             openwrt/sdk:${{ matrix.arch.sdk }}-${{ matrix.release.sdk_version }} \
             sh -c "
+              set -e
+              sed -i -E '/^src-git/s/[;^][^;^]*\$/;openwrt-${{ matrix.release.feed_dir }}/' feeds.conf.default
+              cat feeds.conf.default
               ./scripts/feeds update -a &&
               ./scripts/feeds install -a &&
               make defconfig &&
-              make package/luci-sso/compile -j\$(nproc) V=s
+              make package/luci-sso/compile -j\$(nproc) PKG_RELEASE=${{ needs.drift.outputs.release }} V=s
             "
 
       - name: Collect artifacts
+        env:
+          RELEASE: ${{ needs.drift.outputs.release }}
         run: |
           mkdir -p out
           find bin -type f \( -name 'luci-sso*.ipk' -o -name 'luci-sso*.apk' \) \
@@ -105,6 +147,14 @@ jobs:
           ls -1 out
           # A green build that produced nothing is a silent failure, not a pass.
           [ -n "$(ls -A out)" ] || { echo "ERROR: no packages produced" >&2; exit 1; }
+          # The feed release must be the one the packages carry: name_<v>-rN_<arch>.ipk
+          # or name-<v>-rN.apk.
+          for f in out/*; do
+            case "$(basename "$f")" in
+              *-r"$RELEASE"_*.ipk|*-r"$RELEASE".apk) ;;
+              *) echo "ERROR: $(basename "$f") is not release r$RELEASE" >&2; exit 1 ;;
+            esac
+          done
 
       - uses: actions/upload-artifact@v7
         with:
@@ -134,6 +184,16 @@ jobs:
           path: staging
           pattern: luci-sso-*
 
+      # The scripts live on main, not on gh-pages. Every package file stays on
+      # gh-pages so direct-download rollbacks keep working, but each index
+      # lists only the newest version of a package, as OpenWrt's own feeds do:
+      # newest-only-index.sh is that filter. luci-sso-deps.sh lists a
+      # package's dependencies.
+      - name: Fetch the feed scripts
+        run: |
+          git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
+          git show ${{ github.sha }}:scripts/luci-sso-deps.sh > "$RUNNER_TEMP/luci-sso-deps.sh"
+
       # luci-sso itself is PKGARCH:=all after 0.10.0: one package for every
       # architecture. Only the luci-sso-crypto-* packages carry the compiled
       # native.so and are built per architecture. Every build job produces the
@@ -149,6 +209,13 @@ jobs:
       # A 25.12 package's arch is the one apk records in it, read after it is
       # signed in a scratch directory. A version already published is never
       # replaced, so 0.10.0 and older stay per-arch, as they were published.
+      #
+      # A higher luci-sso/feed-release rebuilds a published luci-sso version
+      # against libraries OpenWrt has renamed since. Of that rebuild, only the
+      # packages whose dependencies differ from the newest published release
+      # of the same version are published: a rename of libwolfssl republishes
+      # luci-sso-crypto-wolfssl, for the series and architectures it renamed
+      # it in, and a router with another backend sees no upgrade.
       - name: Sign and sort the packages into the feed
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
@@ -157,7 +224,7 @@ jobs:
           ref=x86_64
           fail() { echo "::error::$*"; exit 1; }
 
-          rm -rf new
+          rm -rf new deps
           for d in staging/luci-sso-*; do
             [ -d "$d" ] || continue
             name=$(basename "$d")                       # luci-sso-<arch>-<feed_dir>
@@ -169,13 +236,19 @@ jobs:
           [ -d "new/24.10/$ref" ] && [ -d "new/25.12/$ref" ] \
             || fail "no $ref build: the architecture-independent packages are taken from it"
 
-          # 25.12: sign each package and record its arch next to it.
+          # 25.12: sign each package and record its arch and dependencies next
+          # to it, and the dependencies of the published luci-sso packages
+          # under deps/: reading an apk takes apk-tools, which is in the SDK.
           [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
           chmod -R 777 new/25.12
+          mkdir -p 25.12 deps/25.12
           docker run --rm \
             --user $(id -u):$(id -g) \
             $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
             -v ${{ github.workspace }}/new/25.12:/new \
+            -v ${{ github.workspace }}/25.12:/feed:ro \
+            -v ${{ github.workspace }}/deps/25.12:/deps \
+            -v "$RUNNER_TEMP/luci-sso-deps.sh":/luci-sso-deps.sh:ro \
             openwrt/sdk:x86-64-25.12.3 \
             sh -c "
               set -e
@@ -188,18 +261,61 @@ jobs:
                 arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
                 [ -n \"\$arch\" ] || { echo \"no arch in \$pkg\" >&2; exit 1; }
                 echo \"\$arch\" > \"\$pkg.arch\"
+                sh /luci-sso-deps.sh depends \"\$pkg\" > \"\$pkg.deps\"
+              done
+              for pkg in /feed/*/luci-sso*.apk; do
+                [ -f \"\$pkg\" ] || continue
+                dir=/deps/\$(basename \"\$(dirname \"\$pkg\")\")
+                mkdir -p \"\$dir\"
+                sh /luci-sso-deps.sh depends \"\$pkg\" > \"\$dir/\$(basename \"\$pkg\").deps\"
               done
             "
           rm -f /tmp/apk.key
 
-          # publish <package> <dest dir>: never replaces a published file.
+          # deps_of <package>: its dependencies, one per line.
+          deps_of() {
+            case "$1" in
+              *.ipk) sh "$RUNNER_TEMP/luci-sso-deps.sh" depends "$1" ;;
+              new/*) cat "$1.deps" ;;
+              *)     cat "deps/$1.deps" ;;
+            esac
+          }
+          # newest_same <package> <dest dir>: the published package in <dest
+          # dir> with the same name, version and arch, and the highest release.
+          #   <name>_<version>-r<N>_<arch>.ipk   <name>-<version>-r<N>.apk
+          newest_same() {
+            base=$(basename "$1")
+            case "$base" in
+              *.ipk) glob=$(printf '%s' "$base" | sed -E 's/-r[0-9]+_/-r*_/') ;;
+              *.apk) glob=$(printf '%s' "$base" | sed -E 's/-r[0-9]+\.apk$/-r*.apk/') ;;
+            esac
+            for f in "$2"/$glob; do
+              [ -f "$f" ] || continue
+              printf '%s %s\n' "$(basename "$f" | sed -E 's/.*-r([0-9]+)(_.*\.ipk|\.apk)$/\1/')" "$f"
+            done | sort -n | tail -n 1 | cut -d' ' -f2-
+          }
+          # publish <package> <dest dir>: never replaces a published file, and
+          # files a rebuild of a published version only if its dependencies
+          # changed.
           publish() {
-            mkdir -p "$2"
-            if [ -e "$2/$(basename "$1")" ]; then
-              echo "kept   $2/$(basename "$1") (already published)"
-            else
-              cp "$1" "$2/" && echo "filed  $2/$(basename "$1")"
+            base=$(basename "$1")
+            if [ -e "$2/$base" ]; then
+              echo "kept   $2/$base (already published)"
+              return
             fi
+            prev=$(newest_same "$1" "$2")
+            if [ -n "$prev" ]; then
+              new_deps=$(deps_of "$1")
+              prev_deps=$(deps_of "$prev")
+              [ -n "$new_deps" ] && [ -n "$prev_deps" ] \
+                || fail "could not read the dependencies of $1 or $prev"
+              if [ "$new_deps" = "$prev_deps" ]; then
+                echo "same   $2/$base (dependencies of $(basename "$prev"), not filed)"
+                return
+              fi
+            fi
+            mkdir -p "$2"
+            cp "$1" "$2/" && echo "filed  $2/$base"
           }
           all_24() { ls "new/24.10/$1" | grep '_all\.ipk$' || true; }
           all_25() {
@@ -237,13 +353,7 @@ jobs:
               fi
             done
           done
-          rm -rf new
-
-      # Every package file stays on gh-pages so direct-download rollbacks keep
-      # working, but each index lists only the newest version of a package, as
-      # OpenWrt's own feeds do. The filter lives on main, not on gh-pages.
-      - name: Fetch the newest-only index filter
-        run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
+          rm -rf new deps
 
       - name: Regenerate and sign the indexes
         env:

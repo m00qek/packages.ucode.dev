@@ -77,14 +77,45 @@ upgrades and choosing a backend, see the
 
 `luci-sso/Makefile` is generated from luci-sso's own package Makefile; do not
 edit it here. After tagging a luci-sso release, regenerate it from the luci-sso
-checkout and commit the result:
+checkout, set `luci-sso/feed-release` back to `1`, and commit both together:
 
 ```sh
 make feed-makefile VERSION=<version> OUT=<this repo>/luci-sso/Makefile
+echo 1 > <this repo>/luci-sso/feed-release
 ```
 
-The `luci-sso` workflow regenerates it from the tag its `PKG_VERSION` names and
-fails, before building or publishing anything, if the committed file differs.
+The `luci-sso` workflow regenerates the Makefile from the tag its `PKG_VERSION`
+names and fails, before building or publishing anything, if the committed file
+differs. It also fails if `luci-sso/feed-release` is lower than the Makefile's
+`PKG_RELEASE`; use that number instead of `1` if the Makefile's is higher.
+
+### The feed release
+
+The `-rN` in `0.10.0-r2` is the package release. The feed builds luci-sso with
+the one in `luci-sso/feed-release`, passed to the SDK as `PKG_RELEASE`, so the
+generated Makefile stays as generated. It is how the feed rebuilds a luci-sso
+version that OpenWrt has broken:
+
+OpenWrt names some libraries after their ABI, e.g. `libwolfssl5.9.1.e624513f`.
+Every OpenWrt 24.10.x router installs from one OpenWrt feed for the whole
+`openwrt-24.10` branch, and 25.12.x routers from one for `openwrt-25.12`. When
+the branch updates such a library, that feed serves it under the new name
+only, and a `luci-sso-crypto-wolfssl` built against the old name can no longer
+be installed. So:
+
+- The `luci-sso` workflow builds against OpenWrt's branches, `openwrt-24.10` and
+  `openwrt-25.12`, not the release tag the SDK image pins, so the packages
+  depend on the libraries routers are offered.
+- Raising `luci-sso/feed-release` rebuilds the current luci-sso version. Of
+  that rebuild, the workflow publishes only the packages whose dependencies
+  differ from the newest published release of that version: a renamed
+  `libwolfssl` republishes `luci-sso-crypto-wolfssl` alone, and only for the
+  series and architectures it was renamed in. Routers with it installed see an
+  upgrade; routers with another backend see nothing. So the releases of the
+  luci-sso packages may differ, e.g. `luci-sso` 0.10.0-r1 with
+  `luci-sso-crypto-wolfssl` 0.10.0-r2.
+
+Raise `luci-sso/feed-release` by one, in a commit of its own, to rebuild.
 
 ## wgpathd
 
