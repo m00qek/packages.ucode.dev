@@ -1,0 +1,191 @@
+name: owrtfetch
+
+# Compile-only, like wgpathd.yml: owrtfetch's own CI runs its tests on the tag
+# this is built from. owrtfetch is noarch and supports OpenWrt 25.12 only, so
+# there is one build, with the x86-64 25.12 SDK, and the package is published
+# to 25.12/noarch/ and listed in every 25.12 index.
+
+on:
+  push:
+    branches: [main, master]
+    # A negated pattern after the others drops a file matched earlier, so a
+    # push that changes only Markdown files does not build or publish.
+    paths:
+      - 'owrtfetch/**'
+      - '.github/workflows/owrtfetch.yml'
+      - '!**/*.md'
+  workflow_dispatch:
+
+jobs:
+  # owrtfetch/Makefile is generated, never edited here: owrtfetch's
+  # devenv/scripts/gen-feed-makefile.sh derives it from the release tarball
+  # (`make feed-makefile VERSION=x` in owrtfetch). This job regenerates it with
+  # the generator from the tag PKG_VERSION names and fails on any difference,
+  # so a hand edit, a stale copy or a wrong PKG_HASH never reaches the build
+  # or the feed. The generator downloads the tarball itself, so a matching
+  # PKG_HASH is proven too.
+  drift:
+    name: Makefile matches owrtfetch release
+    runs-on: ubuntu-latest
+    env:
+      OWRTFETCH_RAW: https://raw.githubusercontent.com/m00qek/owrtfetch
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Regenerate owrtfetch/Makefile and compare
+        run: |
+          set -eu
+          version=$(sed -n 's/^PKG_VERSION:=//p' owrtfetch/Makefile)
+          [ -n "$version" ] || { echo "::error file=owrtfetch/Makefile::no PKG_VERSION"; exit 1; }
+          gen="$RUNNER_TEMP/gen-feed-makefile.sh"
+          script=devenv/scripts/gen-feed-makefile.sh
+
+          # The generator the release itself shipped; every release has one.
+          code=$(curl -sSL --retry 3 -o "$gen" -w '%{http_code}' "$OWRTFETCH_RAW/v$version/$script" || true)
+          [ "$code" = 200 ] || { echo "::error::could not fetch $script for v$version (HTTP $code)"; exit 1; }
+
+          sh "$gen" -o "$RUNNER_TEMP/Makefile" "$version"
+          if ! diff -u "$RUNNER_TEMP/Makefile" owrtfetch/Makefile; then
+            echo "::error file=owrtfetch/Makefile::differs from the Makefile generated for owrtfetch v$version. Regenerate it in owrtfetch with: make feed-makefile VERSION=$version OUT=<this repo>/owrtfetch/Makefile"
+            exit 1
+          fi
+          echo "owrtfetch/Makefile matches the one generated for v$version"
+
+  build:
+    name: Build owrtfetch (25.12.3)
+    needs: drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Nothing is compiled, so the dependencies need not be in the SDK:
+      # NO_DEPS skips building them, and apk still records them.
+      - name: Build packages
+        run: |
+          mkdir -p bin
+          chmod 777 bin
+          docker run --rm \
+            -v ${{ github.workspace }}/owrtfetch:/builder/package/owrtfetch:ro \
+            -v ${{ github.workspace }}/bin:/builder/bin \
+            openwrt/sdk:x86-64-25.12.3 \
+            sh -c "
+              make defconfig &&
+              make package/owrtfetch/compile NO_DEPS=1 CHECK_KEY=0 V=s
+            "
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          find bin -type f -name 'owrtfetch-*.apk' -exec cp {} out/ \;
+          ls -1 out
+          # A green build that produced nothing is a silent failure.
+          [ "$(ls out | wc -l)" -eq 1 ] || { echo "ERROR: expected 1 package" >&2; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: owrtfetch-25.12
+          path: out/
+
+  deploy:
+    name: Publish to feed
+    needs: [drift, build]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Shared with the other workflows' deploy jobs: all commit to gh-pages,
+    # and two concurrent runs would clobber each other's index.
+    concurrency:
+      group: feed-gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: owrtfetch-25.12
+          path: new-apk
+
+      - name: Fetch the newest-only index filter
+        run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
+
+      # Signed in a scratch directory, then filed under 25.12/noarch/, where
+      # apk downloads a noarch package from whichever arch index listed it.
+      # A version already published is never replaced.
+      - name: Sign and file the packages
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
+        run: |
+          set -eu
+          if [ -n "$APK_FEED_SIGNING_KEY" ]; then
+            printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
+          fi
+          chmod -R 777 new-apk
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
+            -v ${{ github.workspace }}/new-apk:/new \
+            openwrt/sdk:x86-64-25.12.3 \
+            sh -c "
+              set -e
+              for pkg in /new/*.apk; do
+                if [ -f /apk.key ]; then
+                  /builder/staging_dir/host/bin/apk adbsign \
+                    --allow-untrusted --reset-signatures \
+                    --sign-key /apk.key \"\$pkg\"
+                fi
+                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
+                [ \"\$arch\" = noarch ] || { echo \"\$pkg is '\$arch', not noarch\" >&2; exit 1; }
+              done
+            "
+          rm -f /tmp/apk.key
+          mkdir -p 25.12/noarch
+          for pkg in new-apk/*.apk; do
+            [ -e "25.12/noarch/$(basename "$pkg")" ] || cp "$pkg" 25.12/noarch/
+          done
+          rm -rf new-apk
+
+      # The same loop as ci.yml's, luci-sso.yml's and wgpathd.yml's, over the
+      # same directories, so whichever workflow publishes last, no index loses
+      # the others' packages.
+      - name: Regenerate and sign 25.12 indexes
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
+        run: |
+          set -eu
+          [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
+          for dir in 25.12/*/ ; do
+            case "$dir" in 25.12/noarch/) continue ;; esac
+            chmod -R 777 "$dir" || true
+            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
+              -v ${{ github.workspace }}/25.12/noarch:/noarch:ro \
+              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
+              --user $(id -u):$(id -g) \
+              openwrt/sdk:x86-64-25.12.3 \
+              sh -c "set -e
+                     files=
+                     for f in /noarch/*.apk /pkgs/*.apk; do
+                       if [ -f \"\$f\" ]; then files=\"\$files \$f\"; fi
+                     done
+                     newest=\$(sh /newest-only-index.sh apk \$files)
+                     /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest"
+            if [ -f /tmp/apk.key ]; then
+              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
+                --user $(id -u):$(id -g) \
+                openwrt/sdk:x86-64-25.12.3 \
+                /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures \
+                  --sign-key /apk.key /pkgs/APKINDEX.tar.gz
+            fi
+          done
+          rm -f /tmp/apk.key
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 25.12/
+          git diff --staged --quiet || git commit -m "publish owrtfetch packages"
+          git push

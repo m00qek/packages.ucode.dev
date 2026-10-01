@@ -1,7 +1,8 @@
 # packages.ucode.dev
 
 Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/ucode),
-[luci-sso](https://github.com/m00qek/luci-sso) and [wgpathd](https://github.com/m00qek/wgpathd).
+[luci-sso](https://github.com/m00qek/luci-sso), [wgpathd](https://github.com/m00qek/wgpathd)
+and [owrtfetch](https://github.com/m00qek/owrtfetch).
 
 ## Packages
 
@@ -15,6 +16,7 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 | luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.0-r8 |
 | luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.0-r8 |
+| [owrtfetch](https://github.com/m00qek/owrtfetch) | A neofetch-like summary for OpenWrt routers, written in ucode. | — | `noarch` | 0.1.0-r1 |
 
 `all` means any architecture. To see your router's architecture, run
 `opkg print-architecture` on OpenWrt 24.10 or `apk --print-arch` on OpenWrt 25.12.
@@ -39,6 +41,7 @@ apk update
 apk add ucode-docopt ucode-utest
 apk add luci-sso luci-sso-crypto-mbedtls
 apk add wgpathd luci-app-wgpathd
+apk add owrtfetch
 ```
 
 apk reads the index at `25.12/<arch>/APKINDEX.tar.gz`, where `<arch>` is what
@@ -100,6 +103,24 @@ make feed-makefile VERSION=<version> OUT=<this repo>/wgpathd/Makefile
 ```
 
 The `wgpathd` workflow regenerates it from the tag its `PKG_VERSION` names and
+fails, before building or publishing anything, if the committed file differs.
+
+## owrtfetch
+
+owrtfetch is published for OpenWrt 25.12 only, the release it supports. See its
+[README](https://github.com/m00qek/owrtfetch#readme) for what it shows and how.
+
+### Updating `owrtfetch/Makefile`
+
+`owrtfetch/Makefile` is generated from owrtfetch's own package Makefile, the
+same way as wgpathd's; do not edit it here. After tagging an owrtfetch release,
+regenerate it from the owrtfetch checkout and commit the result:
+
+```sh
+make feed-makefile VERSION=<version> OUT=<this repo>/owrtfetch/Makefile
+```
+
+The `owrtfetch` workflow regenerates it from the tag its `PKG_VERSION` names and
 fails, before building or publishing anything, if the committed file differs.
 
 ## Using as a build feed
