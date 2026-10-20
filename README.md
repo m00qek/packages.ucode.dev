@@ -14,8 +14,8 @@ and [owrtfetch](https://github.com/m00qek/owrtfetch).
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
 | luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r2 |
-| [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.1-r1 |
-| luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.1-r1 |
+| [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.2-r1 |
+| luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.2-r1 |
 | [owrtfetch](https://github.com/m00qek/owrtfetch) | A neofetch-like summary for OpenWrt routers, written in ucode. | — | `noarch` | 0.1.0-r1 |
 
 `all` means any architecture. To see your router's architecture, run
