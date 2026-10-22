@@ -1,8 +1,9 @@
 # packages.ucode.dev
 
 Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/ucode),
-[luci-sso](https://github.com/m00qek/luci-sso), [wgpathd](https://github.com/m00qek/wgpathd)
-and [owrtfetch](https://github.com/m00qek/owrtfetch).
+[luci-sso](https://github.com/m00qek/luci-sso), [wgpathd](https://github.com/m00qek/wgpathd),
+[owrtfetch](https://github.com/m00qek/owrtfetch) and
+[ucode-prometheus-exporter](https://github.com/m00qek/ucode-prometheus-exporter).
 
 ## Packages
 
@@ -17,6 +18,11 @@ and [owrtfetch](https://github.com/m00qek/owrtfetch).
 | [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.2-r1 |
 | luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.2-r1 |
 | [owrtfetch](https://github.com/m00qek/owrtfetch) | A neofetch-like summary for OpenWrt routers, written in ucode. | — | `noarch` | 0.1.0-r1 |
+| [ucode-prometheus-exporter](https://github.com/m00qek/ucode-prometheus-exporter) | Metrics of OpenWrt for Prometheus, written in ucode and served by uhttpd, with each collector jailed to what it declares. | — | `noarch` | 0.3.2-r1 |
+| ucode-prometheus-exporter-&lt;collector&gt; | A collector of its own package (33), or a group of them: `-full`, `-hardware`, `-network`, `-wireless`. | — | `noarch` | 0.3.2-r1 |
+| ucode-prometheus-exporter-cli | The `prometheus-exporter` command. | — | `noarch` | 0.3.2-r1 |
+| ucode-prometheus-exporter-devkit | What a collector of another package is written and tested with. | — | `noarch` | 0.3.2-r1 |
+| luci-app-prometheus-exporter | LuCI pages for the exporter. | — | `noarch` | 0.3.2-r1 |
 
 `all` means any architecture. To see your router's architecture, run
 `opkg print-architecture` on OpenWrt 24.10 or `apk --print-arch` on OpenWrt 25.12.
@@ -42,6 +48,7 @@ apk add ucode-docopt ucode-utest
 apk add luci-sso luci-sso-crypto-mbedtls
 apk add wgpathd luci-app-wgpathd
 apk add owrtfetch
+apk add ucode-prometheus-exporter ucode-prometheus-exporter-full luci-app-prometheus-exporter
 ```
 
 apk reads the index at `25.12/<arch>/APKINDEX.tar.gz`, where `<arch>` is what
