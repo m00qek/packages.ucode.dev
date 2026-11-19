@@ -45,7 +45,11 @@ shift 4
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT INT TERM
+# The SDK runs as its own user (buildbot, uid 1000), which the runner's user
+# need not be. The build makes what it writes removable before it ends; if it
+# failed first, what remains is left behind rather than failing the cleanup,
+# and the build's own exit status is kept.
+trap 'rm -rf "$work" 2>/dev/null || true' EXIT INT TERM
 mkdir -p "$work/pkg" "$work/bin" "$work/out" "$out"
 out=$(cd "$out" && pwd)
 
@@ -109,6 +113,7 @@ docker run --rm $mounts \
 				cp "$files" "/out/$p/"
 			done
 		done < /releases
+		chmod -R a+rwX /out /builder/bin
 	'
 
 # Every file must carry the release the build was asked for:
