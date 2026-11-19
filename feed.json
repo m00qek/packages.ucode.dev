@@ -1,0 +1,52 @@
+{
+  "releases": {
+    "24.10": {
+      "sdk": "24.10.6",
+      "arches": [
+        { "sdk": "x86-64", "pkg": "x86_64" },
+        { "sdk": "aarch64_generic", "pkg": "aarch64_generic" },
+        { "sdk": "aarch64_cortex-a53", "pkg": "aarch64_cortex-a53" },
+        { "sdk": "mips_4kec", "pkg": "mips_4kec" }
+      ]
+    },
+    "25.12": {
+      "sdk": "25.12.5",
+      "arches": [
+        { "sdk": "x86-64", "pkg": "x86_64" },
+        { "sdk": "aarch64_generic", "pkg": "aarch64_generic" },
+        { "sdk": "aarch64_cortex-a53", "pkg": "aarch64_cortex-a53" },
+        { "sdk": "mips_24kc", "pkg": "mips_24kc" }
+      ]
+    }
+  },
+  "packages": {
+    "ucode-docopt": {
+      "build": "noarch",
+      "releases": ["24.10", "25.12"]
+    },
+    "ucode-utest": {
+      "build": "noarch",
+      "releases": ["24.10", "25.12"]
+    },
+    "luci-sso": {
+      "build": "arch",
+      "releases": ["24.10", "25.12"],
+      "upstream": { "repo": "m00qek/luci-sso", "generator-fallback": true }
+    },
+    "wgpathd": {
+      "build": "noarch",
+      "releases": ["25.12"],
+      "upstream": { "repo": "m00qek/wgpathd", "generator-fallback": true }
+    },
+    "owrtfetch": {
+      "build": "noarch",
+      "releases": ["25.12"],
+      "upstream": { "repo": "m00qek/owrtfetch" }
+    },
+    "ucode-prometheus-exporter": {
+      "build": "noarch",
+      "releases": ["25.12"],
+      "upstream": { "repo": "m00qek/ucode-prometheus-exporter" }
+    }
+  }
+}

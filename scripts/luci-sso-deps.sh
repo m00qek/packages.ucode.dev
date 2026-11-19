@@ -12,7 +12,7 @@
 # Usage:
 #   luci-sso-deps.sh depends PACKAGE
 #       Print the dependencies of one .ipk or .apk file, one name per line,
-#       sorted, without version constraints. Used by luci-sso.yml to tell a
+#       sorted, without version constraints. Used by publish.sh --deps-gate to tell a
 #       rebuild that changed nothing from one that must be published.
 #
 #   luci-sso-deps.sh check FEED_DIR
