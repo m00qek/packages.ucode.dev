@@ -19,7 +19,8 @@ name: feed
 # A push or pull request builds the packages whose directory it changes, or
 # every package if it changes feed.json, this workflow or a script the build
 # or publish runs. A manual run builds the packages it names, or all of them.
-# Only main publishes.
+# Every run also builds the packages whose current version gh-pages is
+# missing, e.g. after a cancelled publish. Only main publishes.
 
 on:
   push:
@@ -81,6 +82,10 @@ jobs:
             select((.value.build | IN("noarch", "arch") | not) or
                    ([.value.releases[] | select($r[.] == null)] | length > 0)) | .key' feed.json)
           [ -z "$bad" ] || { echo "::error file=feed.json::bad build or release for: $bad"; exit 1; }
+          bad=$(jq -r '.releases | to_entries[] | select(.value["index-arches"]) |
+            .key as $r | .value["index-arches"] as $i | .value.arches[].pkg |
+            select(IN($i[]) | not) | "\($r)/\(.)"' feed.json)
+          [ -z "$bad" ] || { echo "::error file=feed.json::built but not in index-arches: $bad"; exit 1; }
 
           # Changes to these rebuild everything.
           shared='^(feed\.json|\.github/workflows/feed\.yml|scripts/(build|publish|luci-sso-deps|newest-only-index)\.sh)$'
@@ -106,6 +111,46 @@ jobs:
                 fi
               fi ;;
           esac
+          # Also every package whose current version is missing from a
+          # directory gh-pages should have it in: a publish that was
+          # cancelled (the feed-gh-pages queue holds one waiting run, and a
+          # newer one replaces it) or failed is built again by the next run,
+          # rather than waiting for the package's next change. A package with
+          # a feed-release counts at any release of its version: publish.sh
+          # --deps-gate files a rebuild only if its dependencies changed.
+          # Matched by the main package's name, PKG_NAME, as a prefix, which
+          # an arch directory's packages (luci-sso-crypto-*) share.
+          tree=$(git ls-tree -r --name-only origin/gh-pages 2>/dev/null || true)
+          if [ -z "$tree" ]; then
+            echo "::warning::no gh-pages branch to compare with"
+          else
+            # A noarch package's two directories, <release>/ (opkg) and
+            # <release>/noarch/ (apk), are one place: either counts. An arch
+            # package must be in every arch directory of every release.
+            missing=$(for p in $all; do
+              mk=$p/Makefile
+              n=$(sed -n 's/^PKG_NAME:=//p' "$mk")
+              v=$(sed -n 's/^PKG_VERSION:=//p' "$mk" | sed 's/\./\\./g')
+              if [ -f "$p/feed-release" ]; then r='[0-9]+'; else r=$(sed -n 's/^PKG_RELEASE:=//p' "$mk"); fi
+              build=$(jq -r --arg p "$p" '.packages[$p].build' feed.json)
+              for rel in $(jq -r --arg p "$p" '.packages[$p].releases[]' feed.json); do
+                if [ "$build" = noarch ]; then
+                  re="^($rel/${n}_$v-r${r}_all\.ipk|$rel/noarch/$n-$v-r$r\.apk)\$"
+                  printf '%s\n' "$tree" | grep -qE "$re" || { echo "$p ($rel)"; break; }
+                else
+                  for a in $(jq -r --arg r "$rel" '.releases[$r].arches[].pkg' feed.json); do
+                    re="^$rel/$a/$n[^/]*[_-]$v-r$r(_${a}\.ipk|\.apk)\$"
+                    printf '%s\n' "$tree" | grep -qE "$re" || { echo "$p ($rel/$a)"; break 2; }
+                  done
+                fi
+              done
+            done)
+            if [ -n "$missing" ]; then
+              echo "Not published yet, so built too:"
+              printf '%s\n' "$missing" | sed 's/^/  /'
+              selected="$selected $(printf '%s\n' "$missing" | cut -d' ' -f1)"
+            fi
+          fi
           selected=$(printf '%s\n' $selected | sort -u | jq -R . | jq -sc 'map(select(. != ""))')
           echo "Packages: $selected"
 
@@ -271,7 +316,7 @@ jobs:
           set -eu
           if [ -d staging ]; then sh scripts/publish.sh file staging feed; fi
           if [ -d staging-gated ]; then sh scripts/publish.sh file --deps-gate staging-gated feed; fi
-          sh scripts/publish.sh index --pubkeys . feed
+          sh scripts/publish.sh index --manifest feed.json --pubkeys . feed
 
       - name: Commit and push
         working-directory: feed

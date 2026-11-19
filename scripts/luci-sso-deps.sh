@@ -17,8 +17,8 @@
 #
 #   luci-sso-deps.sh check FEED_DIR
 #       FEED_DIR is a checkout of the feed (gh-pages). For each OpenWrt
-#       series and architecture it publishes, take the luci-sso packages its
-#       index lists and compare each dependency on an ABI-named library with
+#       series and architecture whose index lists luci-sso packages, take
+#       those and compare each dependency on an ABI-named library with
 #       the libraries in OpenWrt's live base feed for that series and
 #       architecture. Prints one line per such dependency:
 #
@@ -194,10 +194,12 @@ cmd_check() {
 		for arch_dir in "$series_dir"/*/; do
 			arch=$(basename "$arch_dir")
 			[ "$arch" != noarch ] || continue
+			# Every 25.12 architecture has an index, for the noarch packages;
+			# only those luci-sso is built for list it.
+			feed_index "$feed" "$series" "$arch" "$tmp/feed"
+			[ -s "$tmp/feed" ] || continue
 			found=1
 			live_index "$series" "$arch" "$tmp/live"
-			feed_index "$feed" "$series" "$arch" "$tmp/feed"
-			[ -s "$tmp/feed" ] || die "$series/$arch: the feed lists no luci-sso package"
 
 			# One line per dependency on an ABI-named base library:
 			#   <status> <package> <dependency> [<live library>]
@@ -274,7 +276,7 @@ cmd_check() {
 			done < "$tmp/result"
 		done
 	done
-	[ "$found" = 1 ] || die "check: $feed has no 24.10/<arch> or 25.12/<arch> directory"
+	[ "$found" = 1 ] || die "check: no 24.10/<arch> or 25.12/<arch> index in $feed lists a luci-sso package"
 	return "$status"
 }
 
