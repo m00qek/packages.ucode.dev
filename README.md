@@ -9,12 +9,12 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 
 | Package | Description | OpenWrt 24.10 (opkg) | OpenWrt 25.12 (apk) | Version (current) |
 |---------|-------------|----------------------|---------------------|-------------------|
-| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 1.0.2-r1 |
-| [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 1.5.1-r1 |
-| [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
-| luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
-| luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r1 |
-| luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53` | 0.10.0-r2 |
+| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 1.0.2-r1 |
+| [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 1.5.1-r1 |
+| [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
+| luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
+| luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
+| luci-sso-crypto-wolfssl | WolfSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r2 |
 | [wgpathd](https://github.com/m00qek/wgpathd) | Direct-or-relay path selection for WireGuard hub-and-spoke. | — | `noarch` | 0.1.2-r1 |
 | luci-app-wgpathd | LuCI pages for wgpathd. | — | `noarch` | 0.1.2-r1 |
 | [owrtfetch](https://github.com/m00qek/owrtfetch) | A neofetch-like summary for OpenWrt routers, written in ucode. | — | `noarch` | 0.1.0-r1 |
@@ -91,7 +91,7 @@ make feed-makefile VERSION=<version> OUT=<this repo>/luci-sso/Makefile
 echo 1 > <this repo>/luci-sso/feed-release
 ```
 
-The `luci-sso` workflow regenerates the Makefile from the tag its `PKG_VERSION`
+The `feed` workflow regenerates the Makefile from the tag its `PKG_VERSION`
 names and fails, before building or publishing anything, if the committed file
 differs. It also fails if `luci-sso/feed-release` is lower than the Makefile's
 `PKG_RELEASE`; use that number instead of `1` if the Makefile's is higher.
@@ -99,8 +99,8 @@ differs. It also fails if `luci-sso/feed-release` is lower than the Makefile's
 ### The feed release
 
 The `-rN` in `0.10.0-r2` is the package release. The feed builds luci-sso with
-the one in `luci-sso/feed-release`, passed to the SDK as `PKG_RELEASE`, so the
-generated Makefile stays as generated. It is how the feed rebuilds a luci-sso
+the one in `luci-sso/feed-release`, written into the build's copy of the
+Makefile as `PKG_RELEASE`, so the committed Makefile stays as generated. It is how the feed rebuilds a luci-sso
 version that OpenWrt has broken:
 
 OpenWrt names some libraries after their ABI, e.g. `libwolfssl5.9.1.e624513f`.
@@ -110,7 +110,7 @@ the branch updates such a library, that feed serves it under the new name
 only, and a `luci-sso-crypto-wolfssl` built against the old name can no longer
 be installed. So:
 
-- The `luci-sso` workflow builds against OpenWrt's branches, `openwrt-24.10` and
+- The `feed` workflow builds against OpenWrt's branches, `openwrt-24.10` and
   `openwrt-25.12`, not the release tag the SDK image pins, so the packages
   depend on the libraries routers are offered.
 - Raising `luci-sso/feed-release` rebuilds the current luci-sso version. Of
@@ -139,7 +139,7 @@ live base feed for that branch
 - **Mismatch**: the live feed serves another version of the library. The
   workflow raises `luci-sso/feed-release` by one, commits that to `main` with
   a `Rebuild-For: <series> <arch> <package> <live library>` line per mismatch,
-  and starts the `luci-sso` workflow, which rebuilds and publishes the
+  and starts the `feed` workflow for luci-sso, which rebuilds and publishes the
   packages whose dependencies changed.
 - **Waiting**: a package depends on a newer library than the live feed serves
   yet: it was built from the branch before OpenWrt's buildbots published that
@@ -148,12 +148,12 @@ live base feed for that branch
 It never raises the release twice for the same mismatch. If a mismatch that the
 last change of `luci-sso/feed-release` named in a `Rebuild-For:` line is still
 there, the rebuild did not fix it, or failed, and the workflow fails, listing
-the `luci-sso` runs of that commit, instead of raising the release again. Find
+the `feed` runs of that commit, instead of raising the release again. Find
 out why, then commit a fix or a raise of your own; a commit to
 `luci-sso/feed-release` without `Rebuild-For:` lines re-arms it. When raising
 it by hand to fix a reported mismatch, copy those lines into the commit
 message, so the check stops there too if the rebuild does not fix it. The
-workflow skips a day while a `luci-sso` run is in progress.
+workflow skips a day while a `feed` run is in progress.
 
 To run the check by hand against a checkout of `gh-pages`:
 
@@ -179,7 +179,7 @@ regenerate it from the wgpathd checkout and commit the result:
 make feed-makefile VERSION=<version> OUT=<this repo>/wgpathd/Makefile
 ```
 
-The `wgpathd` workflow regenerates it from the tag its `PKG_VERSION` names and
+The `feed` workflow regenerates it from the tag its `PKG_VERSION` names and
 fails, before building or publishing anything, if the committed file differs.
 
 ## owrtfetch
@@ -197,7 +197,7 @@ regenerate it from the owrtfetch checkout and commit the result:
 make feed-makefile VERSION=<version> OUT=<this repo>/owrtfetch/Makefile
 ```
 
-The `owrtfetch` workflow regenerates it from the tag its `PKG_VERSION` names and
+The `feed` workflow regenerates it from the tag its `PKG_VERSION` names and
 fails, before building or publishing anything, if the committed file differs.
 
 ## Using as a build feed
@@ -217,19 +217,26 @@ Then:
 
 ## Feed structure
 
-Packages are built with the OpenWrt 24.10.x and 25.12.x SDKs and published to
-GitHub Pages. `ucode-docopt` and `ucode-utest` are architecture-independent and are
-built once, with the `x86-64` SDK; so are `wgpathd` and `luci-app-wgpathd`, with
-the 25.12 SDK only. luci-sso contains a C extension, so it and its
-crypto backends are built separately for `x86_64`, `aarch64_generic` and
-`aarch64_cortex-a53`.
+Packages are built with the OpenWrt 24.10.x and 25.12.x SDKs by the `feed`
+workflow (`.github/workflows/feed.yml`) and published to GitHub Pages.
+[`feed.json`](feed.json) lists the releases, the architectures each is built
+for and the packages:
+
+- Packages that compile nothing (ucode, LuCI JavaScript), `"build": "noarch"`,
+  are built once per release, with the `x86-64` SDK.
+- Packages with C code, `"build": "arch"` (today luci-sso and its crypto
+  backends), are built for every architecture of the release, one job per
+  architecture, all in parallel.
+
+Architectures depend on the release: Realtek `rtl838x` switches, for one, are
+`mips_4kec` on 24.10 and `mips_24kc` on 25.12.
 
 | Path | Contents |
 |------|----------|
-| `24.10/` | `ucode-docopt` and `ucode-utest` packages, and the root index that lists every package for every architecture |
-| `24.10/<arch>/` | luci-sso packages for that architecture, with an index of their own |
-| `25.12/<arch>/` | luci-sso packages for that architecture, and the index apk reads for it, which also lists the packages of `25.12/noarch/`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
-| `25.12/noarch/` | `ucode-docopt`, `ucode-utest`, `wgpathd` and `luci-app-wgpathd` packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
+| `24.10/` | architecture-independent (`all`) packages, and the root index that lists every package for every architecture |
+| `24.10/<arch>/` | packages for that architecture, with an index of their own |
+| `25.12/<arch>/` | packages for that architecture, and the index apk reads for it, which also lists the packages of `25.12/noarch/`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
+| `25.12/noarch/` | architecture-independent packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
 
 Like OpenWrt's own feeds, each index lists only the newest version of each
 package, so `opkg install` and `apk add` always get the latest release. Older
@@ -239,3 +246,20 @@ from the feed directory and install that file directly, e.g.
 ```sh
 opkg install https://m00qek.github.io/packages.ucode.dev/24.10/ucode-utest_1.5.0-r1_all.ipk
 ```
+
+### Adding a package or an architecture
+
+- **A package**: add its directory with its `Makefile`, and an entry in
+  `feed.json` with its `build`, its `releases` and, if its Makefile is
+  generated from an upstream release, its `upstream` repository. The workflow
+  fails if a package directory is missing from `feed.json`.
+- **An architecture**: add `{ "sdk": "<SDK image arch>", "pkg": "<package
+  arch>" }` to a release in `feed.json`. The two names differ for x86
+  (`x86-64` and `x86_64`); `pkg` is what `opkg print-architecture` or
+  `apk --print-arch` prints on the router, and `openwrt/sdk:<sdk>-<version>`
+  must exist on Docker Hub. Every `"build": "arch"` package is built for it.
+
+A push or pull request builds the packages whose directory it changes, or all
+of them if it changes `feed.json`, the workflow or its scripts. To rebuild by
+hand, run the `feed` workflow from the Actions tab, with the packages to build
+or none for all. Only `main` publishes.

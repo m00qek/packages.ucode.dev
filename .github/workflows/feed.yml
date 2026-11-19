@@ -1,0 +1,286 @@
+name: feed
+
+# Builds and publishes every package of the feed. feed.json lists the
+# OpenWrt releases, the architectures built for each, and the packages:
+#
+#   "build": "noarch"  compiles nothing (ucode, LuCI JavaScript): built once
+#                      per release, without building its dependencies
+#   "build": "arch"    compiles C: built for every architecture of the
+#                      release, one job per architecture, in parallel; all
+#                      such packages of a release share that job's SDK
+#                      and the dependencies it builds
+#   "releases"         the OpenWrt releases it is published for
+#   "upstream"         the GitHub repository whose release tarball the
+#                      package's Makefile is generated from; see drift
+#
+# Compile-only, by design: each package's own CI runs its tests, on the tag
+# that is built here. What this adds is the architectures and the feed.
+#
+# A push or pull request builds the packages whose directory it changes, or
+# every package if it changes feed.json, this workflow or a script the build
+# or publish runs. A manual run builds the packages it names, or all of them.
+# Only main publishes.
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Package directories to build and publish, space-separated; empty builds all
+        type: string
+        default: ''
+
+concurrency:
+  group: feed-${{ github.ref }}
+  # A newer push to a pull request makes its older build moot; on main every
+  # run publishes, so none is cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      drift: ${{ steps.plan.outputs.drift }}
+      builds: ${{ steps.plan.outputs.builds }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Choose the packages and the build jobs
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT: ${{ inputs.packages }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          all=$(jq -r '.packages | keys[]' feed.json)
+
+          # feed.json and the package directories must agree, and name
+          # releases and builds that exist.
+          dirs=$(for m in */Makefile; do dirname "$m"; done)
+          for d in $dirs; do
+            printf '%s\n' "$all" | grep -qx "$d" || { echo "::error file=feed.json::$d/ is not in feed.json"; exit 1; }
+          done
+          for p in $all; do
+            [ -f "$p/Makefile" ] || { echo "::error file=feed.json::$p has no $p/Makefile"; exit 1; }
+          done
+          bad=$(jq -r '.releases as $r | .packages | to_entries[] |
+            select((.value.build | IN("noarch", "arch") | not) or
+                   ([.value.releases[] | select($r[.] == null)] | length > 0)) | .key' feed.json)
+          [ -z "$bad" ] || { echo "::error file=feed.json::bad build or release for: $bad"; exit 1; }
+
+          # Changes to these rebuild everything.
+          shared='^(feed\.json|\.github/workflows/feed\.yml|scripts/(build|publish|luci-sso-deps|newest-only-index)\.sh)$'
+          case "$EVENT" in
+            workflow_dispatch)
+              selected=${INPUT:-$all}
+              for p in $selected; do
+                printf '%s\n' "$all" | grep -qx "$p" || { echo "::error::$p is not a package in feed.json"; exit 1; }
+              done ;;
+            *)
+              base=${BASE:-$BEFORE}
+              if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+                echo "No base commit to compare with: building everything"
+                selected=$all
+              else
+                changed=$(git diff --name-only "$base" "$GITHUB_SHA" | grep -v '\.md$' || true)
+                if printf '%s\n' "$changed" | grep -qE "$shared"; then
+                  selected=$all
+                else
+                  selected=$(for p in $all; do
+                    if printf '%s\n' "$changed" | grep -q "^$p/"; then echo "$p"; fi
+                  done)
+                fi
+              fi ;;
+          esac
+          selected=$(printf '%s\n' $selected | sort -u | jq -R . | jq -sc 'map(select(. != ""))')
+          echo "Packages: $selected"
+
+          # drift: one job per selected package with an upstream.
+          # builds:  per release, one noarch job for its noarch packages, and
+          #          one job per architecture for its arch packages.
+          jq -c --argjson sel "$selected" '. as $m | {
+            drift: [$sel[] | . as $p | $m.packages[$p] | select(.upstream) |
+                    {package: $p, repo: .upstream.repo,
+                     fallback: (.upstream["generator-fallback"] // false)}],
+            builds: [$m.releases | to_entries[] | .key as $rel | .value as $r |
+              (def pkgs($kind): [$sel[] | select($m.packages[.].build == $kind and
+                                   ($m.packages[.].releases | index($rel)))] | join(" ");
+               (pkgs("noarch") | select(. != "") |
+                  {release: $rel, arch: "noarch", image: "openwrt/sdk:x86-64-\($r.sdk)", packages: .}),
+               (pkgs("arch") as $p | select($p != "") | $r.arches[] |
+                  {release: $rel, arch: .pkg, image: "openwrt/sdk:\(.sdk)-\($r.sdk)", packages: $p}))]
+          }' feed.json > "$RUNNER_TEMP/plan.json"
+          jq . "$RUNNER_TEMP/plan.json"
+          echo "drift=$(jq -c .drift "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+          echo "builds=$(jq -c .builds "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+
+  # A package with an upstream has a Makefile generated, never edited here:
+  # the upstream's devenv/scripts/gen-feed-makefile.sh derives it from the
+  # release tarball (`make feed-makefile VERSION=x` there). This regenerates
+  # it with the generator from the tag PKG_VERSION names and fails on any
+  # difference, so a hand edit, a stale copy or a wrong PKG_HASH never reaches
+  # the build or the feed. The generator downloads the tarball itself, so a
+  # matching PKG_HASH is proven too.
+  drift:
+    name: ${{ matrix.package }} Makefile matches its release
+    needs: plan
+    if: needs.plan.outputs.drift != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.drift) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Regenerate ${{ matrix.package }}/Makefile and compare
+        env:
+          PKG: ${{ matrix.package }}
+          RAW: https://raw.githubusercontent.com/${{ matrix.repo }}
+          FALLBACK: ${{ matrix.fallback }}
+        run: |
+          set -eu
+          makefile=$PKG/Makefile
+          version=$(sed -n 's/^PKG_VERSION:=//p' "$makefile")
+          [ -n "$version" ] || { echo "::error file=$makefile::no PKG_VERSION"; exit 1; }
+          gen="$RUNNER_TEMP/gen-feed-makefile.sh"
+          script=devenv/scripts/gen-feed-makefile.sh
+
+          # The generator the release itself shipped. "generator-fallback"
+          # in feed.json: tags from before it existed (luci-sso v0.10.0,
+          # wgpathd v0.1.0) use the one on upstream main; either way it
+          # transforms the Makefile inside the v$version tarball, not main's.
+          code=$(curl -sSL --retry 3 -o "$gen" -w '%{http_code}' "$RAW/v$version/$script" || true)
+          if [ "$code" = 404 ] && [ "$FALLBACK" = true ]; then
+            echo "::warning::$PKG v$version has no $script; using the one on its main"
+            code=$(curl -sSL --retry 3 -o "$gen" -w '%{http_code}' "$RAW/main/$script" || true)
+          fi
+          [ "$code" = 200 ] || { echo "::error::could not fetch $script for $PKG v$version (HTTP $code)"; exit 1; }
+
+          sh "$gen" -o "$RUNNER_TEMP/Makefile" "$version"
+          if ! diff -u "$RUNNER_TEMP/Makefile" "$makefile"; then
+            echo "::error file=$makefile::differs from the Makefile generated for v$version. Regenerate it upstream with: make feed-makefile VERSION=$version OUT=<this repo>/$makefile"
+            exit 1
+          fi
+          echo "$makefile matches the one generated for v$version"
+
+  build:
+    name: Build ${{ matrix.release }} ${{ matrix.arch }}
+    needs: [plan, drift]
+    # A failed drift check stops every build: its Makefile cannot be trusted.
+    if: >-
+      !cancelled() && needs.plan.outputs.builds != '[]' &&
+      needs.plan.result == 'success' &&
+      (needs.drift.result == 'success' || needs.drift.result == 'skipped')
+    runs-on: ubuntu-latest
+    strategy:
+      # One architecture failing does not stop the others from publishing.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.builds) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build ${{ matrix.packages }}
+        run: sh scripts/build.sh "${{ matrix.release }}" "${{ matrix.image }}" "${{ matrix.arch }}" out ${{ matrix.packages }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ matrix.release }}-${{ matrix.arch }}
+          path: out/
+
+  publish:
+    name: Publish to feed
+    needs: [plan, build]
+    # Whatever built is published, even if another architecture failed; this
+    # run still fails, so the failure is seen.
+    if: >-
+      !cancelled() && needs.build.result != 'skipped' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Every commit to gh-pages goes through this job, and two at once would
+    # clobber each other's index.
+    concurrency:
+      group: feed-gh-pages
+      cancel-in-progress: false
+    steps:
+      # main, at the commit that triggered this run, for scripts/ and the
+      # public keys; gh-pages, the feed itself, in feed/.
+      - uses: actions/checkout@v6
+
+      - uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          path: feed
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dl
+          pattern: build-*
+
+      # build-<release>-<arch>/<package>/ -> staging/<release>/<arch>/.
+      # A package with a feed-release goes to staging-gated/ instead: a
+      # higher feed-release rebuilds a published version, e.g. against a
+      # library OpenWrt has renamed since, and only the packages whose
+      # dependencies differ from the newest published release of that
+      # version are filed (publish.sh --deps-gate). A rename of libwolfssl
+      # republishes luci-sso-crypto-wolfssl, for the series and
+      # architectures it renamed it in; a router with another backend sees
+      # no upgrade.
+      - name: Stage the packages
+        run: |
+          set -eu
+          for d in dl/build-*/; do
+            name=$(basename "$d")                   # build-<release>-<arch>
+            release=${name#build-}; release=${release%%-*}
+            arch=${name#build-"$release"-}
+            for p in "$d"*/; do
+              pkg=$(basename "$p")
+              if [ -f "$pkg/feed-release" ]; then stage=staging-gated; else stage=staging; fi
+              mkdir -p "$stage/$release/$arch"
+              cp "$p"* "$stage/$release/$arch/"
+            done
+          done
+          find staging staging-gated -type f 2>/dev/null | sort
+
+      # scripts/publish.sh holds the feed layout, the signing and the index
+      # rules: it files the packages, never replacing a published file, then
+      # regenerates and signs every index.
+      - name: File the packages and regenerate the indexes
+        env:
+          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
+          OPKG_FEED_SIGNING_KEY: ${{ secrets.OPKG_FEED_SIGNING_KEY }}
+        run: |
+          set -eu
+          if [ -d staging ]; then sh scripts/publish.sh file staging feed; fi
+          if [ -d staging-gated ]; then sh scripts/publish.sh file --deps-gate staging-gated feed; fi
+          sh scripts/publish.sh index --pubkeys . feed
+
+      - name: Commit and push
+        working-directory: feed
+        env:
+          PACKAGES: ${{ join(fromJSON(needs.plan.outputs.builds).*.packages, ' ') }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 24.10/ 25.12/
+          pkgs=$(printf '%s\n' $PACKAGES | sort -u | paste -sd ' ' -)
+          git diff --staged --quiet || git commit -m "publish $pkgs from ${GITHUB_SHA::8}"
+          git push

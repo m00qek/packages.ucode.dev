@@ -7,9 +7,9 @@ name: luci-sso dependencies
 # installed. Every day this compares the dependencies of the luci-sso packages
 # the feed lists, per series and architecture, with OpenWrt's live base feed
 # (scripts/luci-sso-deps.sh check). On a mismatch it raises
-# luci-sso/feed-release by one, commits that to main and starts luci-sso.yml,
-# which rebuilds against the branch and publishes the packages whose
-# dependencies changed.
+# luci-sso/feed-release by one, commits that to main and starts feed.yml
+# for luci-sso, which rebuilds against the branch and publishes the
+# packages whose dependencies changed.
 #
 # It never loops. The commit that raises feed-release names each mismatch it
 # rebuilds for in a Rebuild-For: line. If a mismatch the last change of
@@ -19,7 +19,7 @@ name: luci-sso dependencies
 #
 # It does not join the feed-gh-pages group: it never writes gh-pages, and a
 # job waiting in that group would cancel a deploy already waiting there. It
-# instead skips a day while a luci-sso.yml run is in progress, whose deploy
+# instead skips a day while a feed.yml run is in progress, whose deploy
 # is in that group.
 
 on:
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write   # commit luci-sso/feed-release to main
-      actions: write    # start luci-sso.yml
+      actions: write    # start feed.yml
     steps:
       - uses: actions/checkout@v6
         with:
@@ -56,10 +56,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          url=$(gh run list --workflow luci-sso.yml --limit 20 --json status,url \
+          url=$(gh run list --workflow feed.yml --limit 20 --json status,url \
             --jq '[.[] | select(.status != "completed")][0].url // ""')
           if [ -n "$url" ]; then
-            echo "::notice::luci-sso is building or publishing ($url); checking again tomorrow"
+            echo "::notice::the feed is building or publishing ($url); checking again tomorrow"
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
@@ -106,8 +106,8 @@ jobs:
           if git log -1 --format=%B "$last" | grep -Fx -f "$RUNNER_TEMP/trailers" > "$RUNNER_TEMP/repeated"; then
             echo "::error::$last raised luci-sso/feed-release to $(cat luci-sso/feed-release) for these, and they are still there:"
             cat "$RUNNER_TEMP/repeated"
-            echo "The rebuild did not fix them, or did not run. Its luci-sso runs:"
-            gh run list --workflow luci-sso.yml --commit "$last" --json conclusion,url \
+            echo "The rebuild did not fix them, or did not run. Its feed runs:"
+            gh run list --workflow feed.yml --commit "$last" --json conclusion,url \
               --jq '.[] | "  \(.conclusion)  \(.url)"' || true
             echo "Not raising feed-release again: find out why first, then commit a fix or a raise of your own."
             exit 1
@@ -136,5 +136,5 @@ jobs:
           git commit -q -F "$RUNNER_TEMP/message" luci-sso/feed-release
           git push origin HEAD:main
           # A push with the workflow token starts no workflow; a dispatch does.
-          gh workflow run luci-sso.yml --ref main
-          echo "::notice::luci-sso/feed-release is $release; started luci-sso.yml"
+          gh workflow run feed.yml --ref main -f packages=luci-sso
+          echo "::notice::luci-sso/feed-release is $release; started feed.yml for luci-sso"
