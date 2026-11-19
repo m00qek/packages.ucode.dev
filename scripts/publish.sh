@@ -35,12 +35,17 @@
 #       this: its feed-release rebuilds follow OpenWrt renaming a library,
 #       and only the packages that depend on it should reach routers.
 #
-#   publish.sh index [--pubkeys DIR] FEED
+#   publish.sh index [--manifest FEED_JSON] [--pubkeys DIR] FEED
 #       Regenerate and sign every index in FEED, so whichever workflow
 #       publishes last, no index loses another's packages. Each index lists
-#       only the newest version of a package (newest-only-index.sh). With
-#       --pubkeys, DIR/opkg.pub and DIR/apk.pub are copied in as
-#       <release>/feed.pub and <release>/feed.pub.pem.
+#       only the newest version of a package (newest-only-index.sh).
+#
+#       With --manifest, an apk release also gets an index for each arch in
+#       its "index-arches" in FEED_JSON (feed.json), whether or not any
+#       package is built for it: apk reads <release>/<arch>/APKINDEX.tar.gz
+#       only, so the noarch packages reach a router only through an index
+#       for its arch. With --pubkeys, DIR/opkg.pub and DIR/apk.pub are copied
+#       in as <release>/feed.pub and <release>/feed.pub.pem.
 #
 # Environment:
 #   APK_FEED_SIGNING_KEY    apk private key (PEM); unset: apks stay unsigned
@@ -50,7 +55,8 @@
 #   APK_IMAGE               SDK image with apk-tools 3
 #                           (default: openwrt/sdk:x86-64-25.12.3)
 #
-# POSIX sh on the runner, plus docker: the feed tools come from the SDK images.
+# POSIX sh on the runner, plus docker, and jq for --manifest: the feed tools
+# come from the SDK images.
 
 set -eu
 export LC_ALL=C
@@ -316,36 +322,43 @@ opkg_release() {
 }
 
 # apk only installs what the router's own <arch>/APKINDEX.tar.gz lists, so
-# each arch index lists the newest of its own directory and of noarch/.
+# each arch index lists the newest of its own directory and of noarch/. An
+# arch with no packages of its own, made for the manifest's index-arches,
+# lists only noarch/: without it, apk on that arch could install nothing
+# from the feed. All of a release's indexes are built in one container.
 apk_release() {
 	mkdir -p "$1/noarch"
-	noarch=$(cd "$1/noarch" && pwd)
 	for dir in "$1"/*/; do
 		[ -d "$dir" ] || continue
 		case "$dir" in */noarch/) continue ;; esac
-		dir=$(cd "$dir" && pwd)
 		chmod -R 777 "$dir" || true
-		sdk "$APK_IMAGE" -v "$dir":/pkgs -v "$noarch":/noarch:ro -- sh -c "
-			set -e
+	done
+	sdk "$APK_IMAGE" -v "$(cd "$1" && pwd)":/release -- sh -c "
+		set -e
+		for dir in /release/*/; do
+			[ \"\$dir\" != /release/noarch/ ] || continue
 			files=
-			for f in /noarch/*.apk /pkgs/*.apk; do
+			for f in /release/noarch/*.apk \"\$dir\"*.apk; do
 				if [ -f \"\$f\" ]; then files=\"\$files \$f\"; fi
 			done
+			[ -n \"\$files\" ] || { echo \"\$dir: no packages to index\" >&2; exit 1; }
 			newest=\$(sh /scripts/newest-only-index.sh apk \$files)
-			$HOSTBIN/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest
+			$HOSTBIN/apk mkndx --allow-untrusted -o \"\${dir}APKINDEX.tar.gz\" \$newest
 			if [ -f /keys/apk.key ]; then
 				$HOSTBIN/apk adbsign --allow-untrusted --reset-signatures \
-					--sign-key /keys/apk.key /pkgs/APKINDEX.tar.gz
+					--sign-key /keys/apk.key \"\${dir}APKINDEX.tar.gz\"
 			fi
-		"
-	done
+		done
+	"
 }
 
 cmd_index() {
 	pubkeys=
+	manifest=
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			--pubkeys) pubkeys=$2; shift ;;
+			--manifest) manifest=$2; shift ;;
 			-*) usage ;;
 			*) break ;;
 		esac
@@ -363,6 +376,12 @@ cmd_index() {
 				if [ -n "$pubkeys" ]; then cp "$pubkeys/opkg.pub" "$rdir/feed.pub"; fi
 				;;
 			apk)
+				if [ -n "$manifest" ]; then
+					arches=$(jq -r --arg r "$(basename "$rdir")" \
+						'.releases[$r]["index-arches"] // [] | .[]' "$manifest") ||
+						fail "could not read the index-arches of $(basename "$rdir") from $manifest"
+					for a in $arches; do mkdir -p "$rdir/$a"; done
+				fi
 				apk_release "$rdir"
 				if [ -n "$pubkeys" ]; then cp "$pubkeys/apk.pub" "$rdir/feed.pub.pem"; fi
 				;;

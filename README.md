@@ -9,8 +9,8 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 
 | Package | Description | OpenWrt 24.10 (opkg) | OpenWrt 25.12 (apk) | Version (current) |
 |---------|-------------|----------------------|---------------------|-------------------|
-| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 1.0.2-r1 |
-| [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 1.5.1-r1 |
+| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `noarch` | 1.0.2-r1 |
+| [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `noarch` | 1.5.1-r1 |
 | [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
 | luci-sso-crypto-openssl | OpenSSL backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
@@ -24,7 +24,7 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 | ucode-prometheus-exporter-devkit | What a collector of another package is written and tested with. | — | `noarch` | 0.3.2-r1 |
 | luci-app-prometheus-exporter | LuCI pages for the exporter. | — | `noarch` | 0.3.2-r1 |
 
-`all` means any architecture. To see your router's architecture, run
+`all` (24.10) and `noarch` (25.12) mean any architecture. To see your router's architecture, run
 `opkg print-architecture` on OpenWrt 24.10 or `apk --print-arch` on OpenWrt 25.12.
 
 ## Installation
@@ -52,7 +52,9 @@ apk add ucode-prometheus-exporter ucode-prometheus-exporter-full luci-app-promet
 ```
 
 apk reads the index at `25.12/<arch>/APKINDEX.tar.gz`, where `<arch>` is what
-`apk --print-arch` prints.
+`apk --print-arch` prints. There is one for every package architecture of
+OpenWrt 25.12, so the `noarch` packages install on any router; luci-sso only
+on the architectures it is built for.
 
 ### OpenWrt 24.10.x (opkg)
 
@@ -231,11 +233,16 @@ for and the packages:
 Architectures depend on the release: Realtek `rtl838x` switches, for one, are
 `mips_4kec` on 24.10 and `mips_24kc` on 25.12.
 
+A 25.12 router reads only its own architecture's index, so the feed publishes
+an index for every architecture in the release's `index-arches` in
+`feed.json`, all of OpenWrt 25.12's: those no package is built for list just
+the `noarch` packages. A 24.10 router reads one root index for all of them.
+
 | Path | Contents |
 |------|----------|
 | `24.10/` | architecture-independent (`all`) packages, and the root index that lists every package for every architecture |
 | `24.10/<arch>/` | packages for that architecture, with an index of their own |
-| `25.12/<arch>/` | packages for that architecture, and the index apk reads for it, which also lists the packages of `25.12/noarch/`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
+| `25.12/<arch>/` | packages for that architecture, if any, and the index apk reads for it, which also lists the packages of `25.12/noarch/`; one for every architecture in `index-arches`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
 | `25.12/noarch/` | architecture-independent packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
 
 Like OpenWrt's own feeds, each index lists only the newest version of each
@@ -258,8 +265,18 @@ opkg install https://m00qek.github.io/packages.ucode.dev/24.10/ucode-utest_1.5.0
   (`x86-64` and `x86_64`); `pkg` is what `opkg print-architecture` or
   `apk --print-arch` prints on the router, and `openwrt/sdk:<sdk>-<version>`
   must exist on Docker Hub. Every `"build": "arch"` package is built for it.
+  For 25.12, it must also be in the release's `index-arches`.
+- **A 25.12 architecture OpenWrt adds**: add it to `index-arches`. The list
+  is OpenWrt's own:
+
+  ```sh
+  curl -s https://downloads.openwrt.org/releases/<version>/packages/ |
+    grep -oE 'href="[a-z0-9_-]+/"' | sed 's/href="//; s,/",,'
+  ```
 
 A push or pull request builds the packages whose directory it changes, or all
-of them if it changes `feed.json`, the workflow or its scripts. To rebuild by
+of them if it changes `feed.json`, the workflow or its scripts, and any package
+whose current version is missing from the feed, e.g. after a publish was
+cancelled. To rebuild by
 hand, run the `feed` workflow from the Actions tab, with the packages to build
 or none for all. Only `main` publishes.
