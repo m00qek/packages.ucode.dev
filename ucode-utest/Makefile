@@ -1,12 +1,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ucode-utest
-PKG_VERSION:=1.5.1
+PKG_VERSION:=1.5.2
 PKG_RELEASE:=1
 
 PKG_SOURCE:=v$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/m00qek/utest/archive/refs/tags/
-PKG_HASH:=44bbb10a1b2a553144f47384b7fcbf0335741ec98c4ea7df6c3ef19ab99c2389
+PKG_HASH:=36df6e9b106bfdf63ba6e5facf89bf70abd983e66bcaccb7ab2bd745fcc45966
 PKG_BUILD_DIR:=$(BUILD_DIR)/utest-$(PKG_VERSION)
 
 PKG_MAINTAINER:=António Mora <oliveira.fh42@gmail.com>
