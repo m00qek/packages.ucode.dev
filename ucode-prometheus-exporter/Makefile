@@ -4,13 +4,13 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ucode-prometheus-exporter
 # Semantic versions: see docs/explanation/versions.md.
-PKG_VERSION:=0.3.2
+PKG_VERSION:=0.3.3
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/m00qek/ucode-prometheus-exporter/archive/refs/tags/
 PKG_SOURCE_URL_FILE:=v$(PKG_VERSION).tar.gz
-PKG_HASH:=abad45ecc2751af42f9c43640ddc4c75693f92fcf11c41896b2f771f534a8a22
+PKG_HASH:=4bfd4bf5a326dc925eb9a6c572d7843daa4140299f37b0e993efbb94f2d5ee94
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE NOTICE
