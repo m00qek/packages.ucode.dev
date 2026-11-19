@@ -100,99 +100,45 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # Shared with ci.yml's and luci-sso.yml's deploy jobs: all commit to
-    # gh-pages, and two concurrent runs would clobber each other's index.
+    # Shared by every workflow that publishes: all commit to gh-pages, and
+    # two concurrent runs would clobber each other's index.
     concurrency:
       group: feed-gh-pages
       cancel-in-progress: false
     steps:
+      # main, at the commit that triggered this run, for scripts/ and the
+      # public keys; gh-pages, the feed itself, in feed/.
+      - uses: actions/checkout@v6
+
       - uses: actions/checkout@v6
         with:
           ref: gh-pages
+          path: feed
           fetch-depth: 0
 
       - uses: actions/download-artifact@v8
         with:
           name: wgpathd-25.12
-          path: new-apk
+          path: staging/25.12/noarch
 
-      - name: Fetch the newest-only index filter
-        run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
-
-      # Signed in a scratch directory, then filed under 25.12/noarch/, where
-      # apk downloads a noarch package from whichever arch index listed it.
-      # A version already published is never replaced.
-      - name: Sign and file the packages
+      # scripts/publish.sh holds the feed layout, the signing and the index
+      # rules for every workflow that publishes: it files the packages,
+      # never replacing a published file, then regenerates and signs every
+      # index, so whichever workflow publishes last, no index loses another's
+      # packages.
+      - name: File the packages and regenerate the indexes
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
+          OPKG_FEED_SIGNING_KEY: ${{ secrets.OPKG_FEED_SIGNING_KEY }}
         run: |
-          set -eu
-          if [ -n "$APK_FEED_SIGNING_KEY" ]; then
-            printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
-          fi
-          chmod -R 777 new-apk
-          docker run --rm \
-            --user $(id -u):$(id -g) \
-            $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
-            -v ${{ github.workspace }}/new-apk:/new \
-            openwrt/sdk:x86-64-25.12.3 \
-            sh -c "
-              set -e
-              for pkg in /new/*.apk; do
-                if [ -f /apk.key ]; then
-                  /builder/staging_dir/host/bin/apk adbsign \
-                    --allow-untrusted --reset-signatures \
-                    --sign-key /apk.key \"\$pkg\"
-                fi
-                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
-                [ \"\$arch\" = noarch ] || { echo \"\$pkg is '\$arch', not noarch\" >&2; exit 1; }
-              done
-            "
-          rm -f /tmp/apk.key
-          mkdir -p 25.12/noarch
-          for pkg in new-apk/*.apk; do
-            [ -e "25.12/noarch/$(basename "$pkg")" ] || cp "$pkg" 25.12/noarch/
-          done
-          rm -rf new-apk
-
-      # The same loop as ci.yml's and luci-sso.yml's, over the same
-      # directories, so whichever workflow publishes last, no index loses the
-      # others' packages.
-      - name: Regenerate and sign 25.12 indexes
-        env:
-          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
-        run: |
-          set -eu
-          [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
-          for dir in 25.12/*/ ; do
-            case "$dir" in 25.12/noarch/) continue ;; esac
-            chmod -R 777 "$dir" || true
-            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
-              -v ${{ github.workspace }}/25.12/noarch:/noarch:ro \
-              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
-              --user $(id -u):$(id -g) \
-              openwrt/sdk:x86-64-25.12.3 \
-              sh -c "set -e
-                     files=
-                     for f in /noarch/*.apk /pkgs/*.apk; do
-                       if [ -f \"\$f\" ]; then files=\"\$files \$f\"; fi
-                     done
-                     newest=\$(sh /newest-only-index.sh apk \$files)
-                     /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest"
-            if [ -f /tmp/apk.key ]; then
-              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
-                --user $(id -u):$(id -g) \
-                openwrt/sdk:x86-64-25.12.3 \
-                /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures \
-                  --sign-key /apk.key /pkgs/APKINDEX.tar.gz
-            fi
-          done
-          rm -f /tmp/apk.key
+          sh scripts/publish.sh file staging feed
+          sh scripts/publish.sh index --pubkeys . feed
 
       - name: Commit and push
+        working-directory: feed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add 25.12/
+          git add 24.10/ 25.12/
           git diff --staged --quiet || git commit -m "publish wgpathd packages"
           git push
