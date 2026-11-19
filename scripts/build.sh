@@ -113,7 +113,8 @@ docker run --rm $mounts \
 				cp "$files" "/out/$p/"
 			done
 		done < /releases
-		chmod -R a+rwX /out /builder/bin
+		# What it wrote, not the mount points, which are the runner'"'"'s.
+		find /out /builder/bin -mindepth 1 -exec chmod a+rwX {} +
 	'
 
 # Every file must carry the release the build was asked for:
