@@ -47,11 +47,22 @@ jobs:
               make package/ucode-docopt/compile package/ucode-utest/compile V=s
             "
 
+      # bin/ also holds the dependencies the SDK built, e.g. ucode: only this
+      # feed's packages are published.
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          find bin -type f \( -name 'ucode-docopt[_-]*' -o -name 'ucode-utest[_-]*' \) \
+            \( -name '*.ipk' -o -name '*.apk' \) -exec cp {} out/ \;
+          ls -1 out
+          # A green build that produced nothing, or half of it, is a silent failure.
+          [ "$(ls out | wc -l)" -eq 2 ] || { echo "ERROR: expected 2 packages" >&2; exit 1; }
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.feed_dir }}
-          path: bin/packages/x86_64/base/
+          path: out/
 
   deploy:
     name: Deploy to GitHub Pages
@@ -60,159 +71,50 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # Shared with luci-sso.yml's deploy job: both commit to gh-pages, and two
-    # concurrent runs would clobber each other's index.
+    # Shared by every workflow that publishes: all commit to gh-pages, and
+    # two concurrent runs would clobber each other's index.
     concurrency:
       group: feed-gh-pages
       cancel-in-progress: false
     steps:
+      # main, at the commit that triggered this run, for scripts/ and the
+      # public keys; gh-pages, the feed itself, in feed/.
+      - uses: actions/checkout@v6
+
       - uses: actions/checkout@v6
         with:
           ref: gh-pages
+          path: feed
           fetch-depth: 0
 
-      - name: Download 24.10 artifacts
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
           name: packages-24.10
-          path: staging/24.10
+          path: staging/24.10/noarch
 
-      - name: Download 25.12 artifacts
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
           name: packages-25.12
-          path: staging/25.12
+          path: staging/25.12/noarch
 
-      - name: Copy new 24.10 packages
-        run: |
-          mkdir -p 24.10
-          find staging/24.10 \( -name "ucode-docopt_*.ipk" -o -name "ucode-utest_*.ipk" \) -exec cp -n {} 24.10/ \;
-
-      # Every package file stays on gh-pages so direct-download rollbacks keep
-      # working, but each index lists only the newest version of a package, as
-      # OpenWrt's own feeds do. The filter lives on main, not on gh-pages.
-      - name: Fetch the newest-only index filter
-        run: git show ${{ github.sha }}:scripts/newest-only-index.sh > "$RUNNER_TEMP/newest-only-index.sh"
-
-      # apk packages are signed in a scratch directory, then filed under
-      # 25.12/<their own arch>/. ucode-docopt and ucode-utest are noarch, and
-      # apk downloads a noarch package from <repo>/noarch/ whichever arch index
-      # listed it, so 25.12/noarch/ is where they are published. A version
-      # already published is never replaced.
-      - name: Sign and sort new 25.12 packages
+      # scripts/publish.sh holds the feed layout, the signing and the index
+      # rules for every workflow that publishes: it files the packages,
+      # never replacing a published file, then regenerates and signs every
+      # index, so whichever workflow publishes last, no index loses another's
+      # packages.
+      - name: File the packages and regenerate the indexes
         env:
           APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
-        run: |
-          set -eu
-          mkdir -p new-apk
-          find staging/25.12 \( -name "ucode-docopt-*.apk" -o -name "ucode-utest-*.apk" \) -exec cp {} new-apk/ \;
-          if [ -n "$APK_FEED_SIGNING_KEY" ]; then
-            printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key
-          fi
-          docker run --rm \
-            --user $(id -u):$(id -g) \
-            $([ -f /tmp/apk.key ] && echo "-v /tmp/apk.key:/apk.key:ro") \
-            -v ${{ github.workspace }}/new-apk:/new \
-            openwrt/sdk:x86-64-25.12.3 \
-            sh -c "
-              set -e
-              for pkg in /new/*.apk; do
-                if [ -f /apk.key ]; then
-                  /builder/staging_dir/host/bin/apk adbsign \
-                    --allow-untrusted --reset-signatures \
-                    --sign-key /apk.key \"\$pkg\" 2>/dev/null ||
-                    echo \"Warning: could not sign \$pkg\" >&2
-                fi
-                arch=\$(/builder/staging_dir/host/bin/apk adbdump \"\$pkg\" 2>/dev/null | awk '/^ *arch:/{print \$2}')
-                [ -n \"\$arch\" ] || { echo \"no arch in \$pkg\" >&2; exit 1; }
-                echo \"\$arch\" > \"\$pkg.arch\"
-              done
-            "
-          rm -f /tmp/apk.key
-          for pkg in new-apk/*.apk; do
-            dir=25.12/$(cat "$pkg.arch")
-            mkdir -p "$dir"
-            [ -e "$dir/$(basename "$pkg")" ] || cp "$pkg" "$dir/"
-          done
-          rm -rf new-apk
-
-      # The root index combines every directory under 24.10/, luci-sso's
-      # per-arch ones included; luci-sso.yml rebuilds it the same way, with
-      # the same filter, so whichever workflow publishes last, it lists the
-      # same packages. The filter lists each package once per architecture,
-      # and a newer `all` package (luci-sso after 0.10.0) in place of all of
-      # them.
-      - name: Regenerate 24.10 index
-        run: |
-          chmod -R 777 24.10 || true
-          docker run --rm \
-            --user $(id -u):$(id -g) \
-            -v ${{ github.workspace }}/24.10:/pkgs \
-            -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
-            -e MKHASH=/builder/staging_dir/host/bin/mkhash \
-            openwrt/sdk:x86-64-24.10.6 \
-            sh -c "cd /pkgs && /builder/scripts/ipkg-make-index.sh . > /tmp/Packages.all &&
-                   sh /newest-only-index.sh opkg < /tmp/Packages.all > Packages &&
-                   gzip -9c Packages > Packages.gz"
-
-      # Every 25.12 arch index, not just x86_64: apk only installs what the
-      # router's own <arch>/APKINDEX.tar.gz lists, so each index lists the
-      # newest packages of its own directory plus the newest of 25.12/noarch/.
-      # luci-sso.yml runs the same loop over the same directories, so whichever
-      # workflow publishes last, no index loses the other's packages.
-      - name: Regenerate and sign 25.12 indexes
-        env:
-          APK_FEED_SIGNING_KEY: ${{ secrets.APK_FEED_SIGNING_KEY }}
-        run: |
-          set -eu
-          [ -n "${APK_FEED_SIGNING_KEY:-}" ] && printf '%s' "$APK_FEED_SIGNING_KEY" > /tmp/apk.key || true
-          for dir in 25.12/*/ ; do
-            case "$dir" in 25.12/noarch/) continue ;; esac
-            chmod -R 777 "$dir" || true
-            docker run --rm -v ${{ github.workspace }}/"$dir":/pkgs \
-              -v ${{ github.workspace }}/25.12/noarch:/noarch:ro \
-              -v "$RUNNER_TEMP/newest-only-index.sh":/newest-only-index.sh:ro \
-              --user $(id -u):$(id -g) \
-              openwrt/sdk:x86-64-25.12.3 \
-              sh -c "set -e
-                     files=
-                     for f in /noarch/*.apk /pkgs/*.apk; do
-                       if [ -f \"\$f\" ]; then files=\"\$files \$f\"; fi
-                     done
-                     newest=\$(sh /newest-only-index.sh apk \$files)
-                     /builder/staging_dir/host/bin/apk mkndx --allow-untrusted -o /pkgs/APKINDEX.tar.gz \$newest"
-            if [ -f /tmp/apk.key ]; then
-              docker run --rm -v /tmp/apk.key:/apk.key:ro -v ${{ github.workspace }}/"$dir":/pkgs \
-                --user $(id -u):$(id -g) \
-                openwrt/sdk:x86-64-25.12.3 \
-                /builder/staging_dir/host/bin/apk adbsign --allow-untrusted --reset-signatures \
-                  --sign-key /apk.key /pkgs/APKINDEX.tar.gz
-            fi
-          done
-          rm -f /tmp/apk.key
-          git show origin/main:apk.pub > 25.12/feed.pub.pem
-
-      - name: Sign 24.10 index
-        env:
           OPKG_FEED_SIGNING_KEY: ${{ secrets.OPKG_FEED_SIGNING_KEY }}
         run: |
-          git show origin/main:opkg.pub > 24.10/feed.pub
-          if [ -n "$OPKG_FEED_SIGNING_KEY" ]; then
-            chmod -R 777 24.10 || true
-            printf '%s' "$OPKG_FEED_SIGNING_KEY" > /tmp/opkg.key
-            docker run --rm \
-              --user $(id -u):$(id -g) \
-              -v /tmp/opkg.key:/opkg.key:ro \
-              -v ${{ github.workspace }}/24.10:/pkgs \
-              openwrt/sdk:x86-64-24.10.6 \
-              /builder/staging_dir/host/bin/usign -S -m /pkgs/Packages -s /opkg.key -x /pkgs/Packages.sig
-            rm /tmp/opkg.key
-          fi
+          sh scripts/publish.sh file staging feed
+          sh scripts/publish.sh index --pubkeys . feed
 
       - name: Commit and push
+        working-directory: feed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add 24.10/ 25.12/
-          git diff --cached --quiet || git commit -m "chore: deploy packages from ${GITHUB_SHA::8}"
+          git diff --staged --quiet || git commit -m "chore: deploy packages from ${GITHUB_SHA::8}"
           git push
