@@ -9,7 +9,8 @@
 #   <release>/<arch>/           opkg: packages for <arch>, and their index
 #   <release>/noarch/           apk (25.12): noarch packages; every arch index
 #                               lists them, apk downloads them from here
-#   <release>/<arch>/           apk: packages for <arch>, and APKINDEX.tar.gz
+#   <release>/<arch>/           apk: packages for <arch>, APKINDEX.tar.gz, and
+#                               packages.adb with its index.json (apk_release)
 #
 # A release is opkg or apk by the packages it holds: .ipk or .apk.
 #
@@ -326,6 +327,17 @@ opkg_release() {
 # arch with no packages of its own, made for the manifest's index-arches,
 # lists only noarch/: without it, apk on that arch could install nothing
 # from the feed. All of a release's indexes are built in one container.
+#
+# Each arch also gets the same index as packages.adb, plus index.json. A
+# router's repository line is either the release root, for which apk reads
+# <arch>/APKINDEX.tar.gz and fetches <root>/<pkg arch>/<pkg>.apk, or the
+# full URL of an index, as OpenWrt's own distfeeds are, for which apk
+# fetches each package relative to the index's directory. packages.adb is
+# for the second kind: its pkgname-spec points back up to the package's own
+# arch directory, noarch/ included. owut and the ASU server only work with
+# the second kind: they derive the version list from the line, replacing
+# packages.adb with index.json. index.json is what OpenWrt publishes next to
+# its own indexes, made by the SDK's make-index-json.py the same way.
 apk_release() {
 	mkdir -p "$1/noarch"
 	for dir in "$1"/*/; do
@@ -344,10 +356,17 @@ apk_release() {
 			[ -n \"\$files\" ] || { echo \"\$dir: no packages to index\" >&2; exit 1; }
 			newest=\$(sh /scripts/newest-only-index.sh apk \$files)
 			$HOSTBIN/apk mkndx --allow-untrusted -o \"\${dir}APKINDEX.tar.gz\" \$newest
-			if [ -f /keys/apk.key ]; then
-				$HOSTBIN/apk adbsign --allow-untrusted --reset-signatures \
-					--sign-key /keys/apk.key \"\${dir}APKINDEX.tar.gz\"
-			fi
+			$HOSTBIN/apk mkndx --allow-untrusted -o \"\${dir}packages.adb\" \
+				--pkgname-spec '../\${arch}/\${name}-\${version}.apk' \$newest
+			for index in APKINDEX.tar.gz packages.adb; do
+				if [ -f /keys/apk.key ]; then
+					$HOSTBIN/apk adbsign --allow-untrusted --reset-signatures \
+						--sign-key /keys/apk.key \"\${dir}\$index\"
+				fi
+			done
+			$HOSTBIN/apk adbdump --format json \"\${dir}packages.adb\" |
+				python3 /builder/scripts/make-index-json.py -f apk -a \"\$(basename \"\$dir\")\" - \
+				> \"\${dir}index.json\"
 		done
 	"
 }

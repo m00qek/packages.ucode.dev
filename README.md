@@ -56,6 +56,22 @@ apk reads the index at `25.12/<arch>/APKINDEX.tar.gz`, where `<arch>` is what
 OpenWrt 25.12, so the `noarch` packages install on any router; luci-sso only
 on the architectures it is built for.
 
+#### Firmware upgrades with owut or Attended Sysupgrade
+
+`owut` and the ASU server read a feed's package versions from the
+`index.json` next to its index, found by replacing `packages.adb` in the
+repository line. Add the feed by the full URL of your architecture's index
+instead, the way OpenWrt's own feeds in `distfeeds.list` are:
+
+```sh
+echo "https://m00qek.github.io/packages.ucode.dev/25.12/$(apk --print-arch)/packages.adb" \
+  >> /etc/apk/repositories.d/customfeeds.list
+```
+
+It lists the same packages as the line above. Use one of the two, not both.
+An ASU server must also allow the feed, e.g. with
+`repository_allow_list = ["https://m00qek.github.io/packages.ucode.dev/25.12"]`.
+
 ### OpenWrt 24.10.x (opkg)
 
 ```sh
@@ -242,7 +258,7 @@ the `noarch` packages. A 24.10 router reads one root index for all of them.
 |------|----------|
 | `24.10/` | architecture-independent (`all`) packages, and the root index that lists every package for every architecture |
 | `24.10/<arch>/` | packages for that architecture, with an index of their own |
-| `25.12/<arch>/` | packages for that architecture, if any, and the index apk reads for it, which also lists the packages of `25.12/noarch/`; one for every architecture in `index-arches`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
+| `25.12/<arch>/` | packages for that architecture, if any, and the index apk reads for it, which also lists the packages of `25.12/noarch/`: `APKINDEX.tar.gz` for a repository line of the release root, `packages.adb` for one of the index's own URL, and `index.json` with the package versions for owut and ASU; one for every architecture in `index-arches`; `x86_64/` also holds older copies of `ucode-docopt` and `ucode-utest` |
 | `25.12/noarch/` | architecture-independent packages; every `25.12/<arch>/` index lists them, and apk downloads them from here |
 
 Like OpenWrt's own feeds, each index lists only the newest version of each
