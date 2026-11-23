@@ -9,7 +9,7 @@ Custom OpenWrt feed with developer tools for [ucode](https://github.com/jow-/uco
 
 | Package | Description | OpenWrt 24.10 (opkg) | OpenWrt 25.12 (apk) | Version (current) |
 |---------|-------------|----------------------|---------------------|-------------------|
-| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `noarch` | 1.0.2-r1 |
+| [ucode-docopt](https://github.com/m00qek/docopt.uc) | A complete, specification-compliant implementation of docopt for the ucode programming language. | `all` | `noarch` | 1.1.0-r1 |
 | [ucode-utest](https://github.com/m00qek/utest) | A modern, non-invasive testing framework for the ucode ecosystem. Provides a describe/it DSL, built-in mock proxies for uci, ubus, fs, uloop, and uclient, and both sequential and parallel test runners. | `all` | `noarch` | 1.5.2-r1 |
 | [luci-sso](https://github.com/m00qek/luci-sso) | A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies. | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
 | luci-sso-crypto-mbedtls | MbedTLS backend for luci-sso | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_4kec` | `x86_64`, `aarch64_generic`, `aarch64_cortex-a53`, `mips_24kc` | 0.10.0-r1 |
