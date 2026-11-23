@@ -9,7 +9,7 @@
     "luci-sso-crypto-openssl": "0.10.1-r1",
     "luci-sso-crypto-wolfssl": "0.10.1-r1",
     "owrtfetch": "0.1.0-r1",
-    "ucode-docopt": "1.0.2-r1",
+    "ucode-docopt": "1.1.0-r1",
     "ucode-prometheus-exporter": "0.3.3-r1",
     "ucode-prometheus-exporter-agh": "0.3.3-r1",
     "ucode-prometheus-exporter-bmx7": "0.3.3-r1",

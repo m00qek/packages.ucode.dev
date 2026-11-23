@@ -224,7 +224,7 @@ SHA256sum: c3ba009c20d4c73bf9e07cddf74afb5baa50fb85b92f608cf9041bbc026edef9
 Description:  WolfSSL backend for luci-sso
 
 Package: ucode-docopt
-Version: 1.0.2-r1
+Version: 1.1.0-r1
 Depends: libc, ucode
 Source: feeds/base/ucode-docopt
 SourceName: ucode-docopt
@@ -234,9 +234,9 @@ SourceDateEpoch: 1773709139
 Maintainer: m00qek <m00qek@gmail.com>
 Architecture: all
 Installed-Size: 61440
-Filename: ucode-docopt_1.0.2-r1_all.ipk
-Size: 11579
-SHA256sum: f13b9589c338f9e9b1e6e55152159e437e36a6e703698da1bb956c60e7de1601
+Filename: ucode-docopt_1.1.0-r1_all.ipk
+Size: 14108
+SHA256sum: e7e06cd71769ad86440bf71df855efb0e5bfebb58077a53343151ce6b246fd82
 Description:  A complete, specification-compliant implementation of docopt for the ucode programming language.
 
 Package: ucode-utest
