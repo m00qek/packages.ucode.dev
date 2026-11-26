@@ -1,5 +1,5 @@
 Package: luci-sso
-Version: 0.10.1-r1
+Version: 0.10.2-r1
 Depends: libc, ucode, libucode20230711, ucode-mod-fs, ucode-mod-ubus, ucode-mod-uci, ucode-mod-math, ucode-mod-uclient, ucode-mod-uloop, ucode-mod-log, liblucihttp-ucode, rpcd-mod-ucode, luci-sso-crypto, luci-base
 Source: feeds/base/luci-sso
 SourceName: luci-sso
@@ -11,13 +11,13 @@ URL: https://github.com/m00qek/luci-sso
 Maintainer: António Móra <m00qek@gmail.com>
 Architecture: mips_4kec
 Installed-Size: 245760
-Filename: luci-sso_0.10.1-r1_mips_4kec.ipk
-Size: 63426
-SHA256sum: 5fa3308a07ab2ceb249f3b9747710ebf3cc048daa8a4ec60da281647ab662742
+Filename: luci-sso_0.10.2-r1_mips_4kec.ipk
+Size: 64220
+SHA256sum: b5ede357cdcdcc93b07d0afdc7d55e617528ff877796b3787ea42a29bbb1323c
 Description:  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
 
 Package: luci-sso-crypto-mbedtls
-Version: 0.10.1-r1
+Version: 0.10.2-r1
 Depends: libc, libucode20230711, libmbedtls21
 Provides: luci-sso-crypto
 Source: feeds/base/luci-sso
@@ -30,13 +30,13 @@ URL: https://github.com/m00qek/luci-sso
 Maintainer: António Móra <m00qek@gmail.com>
 Architecture: mips_4kec
 Installed-Size: 71680
-Filename: luci-sso-crypto-mbedtls_0.10.1-r1_mips_4kec.ipk
-Size: 5496
-SHA256sum: e63b7d4b718c17aa9b4522236c077d928f5599c005cd9b9adac617bf5821f650
+Filename: luci-sso-crypto-mbedtls_0.10.2-r1_mips_4kec.ipk
+Size: 5492
+SHA256sum: 5e31e816a2d7a8994e62804c47bf10f7e5727447a63b627216354a2ab108c194
 Description:  MbedTLS backend for luci-sso
 
 Package: luci-sso-crypto-openssl
-Version: 0.10.1-r1
+Version: 0.10.2-r1
 Depends: libc, libucode20230711, libopenssl3
 Provides: luci-sso-crypto
 Source: feeds/base/luci-sso
@@ -49,13 +49,13 @@ URL: https://github.com/m00qek/luci-sso
 Maintainer: António Móra <m00qek@gmail.com>
 Architecture: mips_4kec
 Installed-Size: 71680
-Filename: luci-sso-crypto-openssl_0.10.1-r1_mips_4kec.ipk
-Size: 6193
-SHA256sum: 4c79167748e52ef145513478a9a695727fbad5990871d41fc59a74e290c00b2a
+Filename: luci-sso-crypto-openssl_0.10.2-r1_mips_4kec.ipk
+Size: 6195
+SHA256sum: 5ab846c56772dd0f00724312b6917d96e20c1c44ab55ac631f82eadb5e526b15
 Description:  OpenSSL backend for luci-sso
 
 Package: luci-sso-crypto-wolfssl
-Version: 0.10.1-r1
+Version: 0.10.2-r1
 Depends: libc, libucode20230711, libwolfssl5.9.4.e624513f
 Provides: luci-sso-crypto
 Source: feeds/base/luci-sso
@@ -68,8 +68,8 @@ URL: https://github.com/m00qek/luci-sso
 Maintainer: António Móra <m00qek@gmail.com>
 Architecture: mips_4kec
 Installed-Size: 71680
-Filename: luci-sso-crypto-wolfssl_0.10.1-r1_mips_4kec.ipk
-Size: 5339
-SHA256sum: c3ba009c20d4c73bf9e07cddf74afb5baa50fb85b92f608cf9041bbc026edef9
+Filename: luci-sso-crypto-wolfssl_0.10.2-r1_mips_4kec.ipk
+Size: 5343
+SHA256sum: 4f2df03d52b5bda30274b2bd76bdef0e247136b09960a52231f44d34fd975d9d
 Description:  WolfSSL backend for luci-sso
 
