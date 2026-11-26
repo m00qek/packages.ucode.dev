@@ -1,12 +1,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-sso
-PKG_VERSION:=0.10.1
+PKG_VERSION:=0.10.2
 PKG_RELEASE:=1
 
 PKG_SOURCE:=v$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/m00qek/luci-sso/archive/refs/tags/
-PKG_HASH:=63bea7b6c43f6b9ab31670c51fb405ff491101b187e836109563e41118dc18bf
+PKG_HASH:=71108b5e2adc8a448ca48673db1e5cff34bcf4805e4f870ffd7ce17c51ccd06a
 PKG_BUILD_DIR:=$(BUILD_DIR)/luci-sso-$(PKG_VERSION)
 
 PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
